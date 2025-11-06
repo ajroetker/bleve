@@ -1,4 +1,4 @@
-module github.com/blevesearch/bleve/v2/index/scorch/firebug
+module github.com/blevesearch/bleve/v2/index/scorch/vfs
 
 go 1.24.7
 

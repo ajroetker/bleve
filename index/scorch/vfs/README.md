@@ -1,6 +1,6 @@
-# Firebug: Storage Abstraction for Scorch
+# VFS: Storage Abstraction for Scorch
 
-Firebug is a storage abstraction layer for Bleve's Scorch index that decouples filesystem operations from the index implementation. This allows Scorch to use different storage backends like local filesystem, S3, or other object storage systems.
+VFS is a storage abstraction layer for Bleve's Scorch index that decouples filesystem operations from the index implementation. This allows Scorch to use different storage backends like local filesystem, S3, or other object storage systems.
 
 ## Motivation
 
@@ -10,7 +10,7 @@ The original Scorch implementation is tightly coupled to the local filesystem, m
 - Implement sophisticated caching strategies
 - Support distributed/cloud-native deployments
 
-Firebug solves these problems by introducing a `Directory` abstraction inspired by Bluge's design but tailored for Scorch.
+VFS solves these problems by introducing a `Directory` abstraction inspired by Bluge's design but tailored for Scorch.
 
 ## Architecture
 
@@ -22,7 +22,7 @@ Firebug solves these problems by introducing a `Directory` abstraction inspired 
                            │
                            ▼
 ┌──────────────────────────────────────────────────────────────┐
-│              Directory Interface (Firebug)                   │
+│              Directory Interface (VFS)                   │
 │  ├─ Open(path) (Reader, error)                              │
 │  ├─ Create(path) (Writer, error)                            │
 │  ├─ Remove(path) error                                       │
@@ -50,10 +50,10 @@ Firebug solves these problems by introducing a `Directory` abstraction inspired 
 ### Filesystem Directory
 
 ```go
-import "github.com/blevesearch/bleve/v2/index/scorch/firebug"
+import "github.com/blevesearch/bleve/v2/index/scorch/vfs"
 
 // Create a filesystem-backed directory
-dir, err := firebug.NewFSDirectory("/path/to/index")
+dir, err := vfs.NewFSDirectory("/path/to/index")
 if err != nil {
     // handle error
 }
@@ -74,7 +74,7 @@ import (
     "context"
     "github.com/aws/aws-sdk-go-v2/config"
     "github.com/aws/aws-sdk-go-v2/service/s3"
-    "github.com/blevesearch/bleve/v2/index/scorch/firebug"
+    "github.com/blevesearch/bleve/v2/index/scorch/vfs"
 )
 
 // Load AWS configuration
@@ -87,13 +87,13 @@ if err != nil {
 s3Client := s3.NewFromConfig(cfg)
 
 // Configure S3 directory
-s3Config := firebug.S3DirectoryConfig{
+s3Config := vfs.S3DirectoryConfig{
     Bucket:   "my-index-bucket",
     Prefix:   "indexes/my-index",
     Region:   "us-east-1",
     S3Client: s3Client,
     CacheDir: "/tmp/bleve-cache",
-    CacheConfig: firebug.CacheConfig{
+    CacheConfig: vfs.CacheConfig{
         MaxCacheSizeBytes: 1024 * 1024 * 1024, // 1GB
         MaxCacheEntries:   1000,
         EvictionPolicy:    "lru",
@@ -102,7 +102,7 @@ s3Config := firebug.S3DirectoryConfig{
 }
 
 // Create S3-backed directory
-dir, err := firebug.NewS3Directory(s3Config)
+dir, err := vfs.NewS3Directory(s3Config)
 if err != nil {
     // handle error
 }
@@ -114,13 +114,13 @@ if err != nil {
 
 ```go
 // Parse directory URL
-config, err := firebug.ParseDirectoryURL("s3://my-bucket/indexes/my-index", &s3Config)
+config, err := vfs.ParseDirectoryURL("s3://my-bucket/indexes/my-index", &s3Config)
 if err != nil {
     // handle error
 }
 
 // Create directory
-dir, err := firebug.NewDirectory(config)
+dir, err := vfs.NewDirectory(config)
 if err != nil {
     // handle error
 }
@@ -168,7 +168,7 @@ import "github.com/aws/aws-sdk-go-v2/service/dynamodb"
 
 dynamoClient := dynamodb.NewFromConfig(cfg)
 
-s3Config := firebug.S3DirectoryConfig{
+s3Config := vfs.S3DirectoryConfig{
     // ... other config ...
     DynamoDBClient: dynamoClient,
     LockTableName:  "bleve-index-locks",
@@ -194,7 +194,7 @@ aws dynamodb create-table \
 If DynamoDB is not available, S3 locking uses conditional PUT operations. This is less reliable but works in simple scenarios:
 
 ```go
-s3Config := firebug.S3DirectoryConfig{
+s3Config := vfs.S3DirectoryConfig{
     // ... other config ...
     DynamoDBClient: nil, // No DynamoDB client
 }
@@ -229,7 +229,7 @@ S3 storage costs can be optimized:
 
 ## Roadmap
 
-Future enhancements planned for Firebug:
+Future enhancements planned for VFS:
 
 - [ ] Google Cloud Storage (GCS) support
 - [ ] Azure Blob Storage support
@@ -243,16 +243,16 @@ Future enhancements planned for Firebug:
 
 ## Migration Guide
 
-To migrate an existing Scorch index to use Firebug:
+To migrate an existing Scorch index to use VFS:
 
 ### From Local Filesystem to S3
 
 ```go
 // 1. Open existing index with FSDirectory
-fsDir, _ := firebug.NewFSDirectory("/path/to/index")
+fsDir, _ := vfs.NewFSDirectory("/path/to/index")
 
 // 2. Create S3Directory
-s3Dir, _ := firebug.NewS3Directory(s3Config)
+s3Dir, _ := vfs.NewS3Directory(s3Config)
 
 // 3. Copy index to S3 (TODO: implement copy method)
 // This would be done at the Scorch level using CopyTo
@@ -262,7 +262,7 @@ s3Dir, _ := firebug.NewS3Directory(s3Config)
 
 ## Compatibility
 
-Firebug is designed to be a drop-in replacement for Scorch's filesystem operations. The `Directory` interface is intentionally simple to ensure compatibility and ease of implementation.
+VFS is designed to be a drop-in replacement for Scorch's filesystem operations. The `Directory` interface is intentionally simple to ensure compatibility and ease of implementation.
 
 Minimum requirements:
 - Go 1.23+

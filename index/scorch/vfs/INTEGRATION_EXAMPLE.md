@@ -1,6 +1,6 @@
-# Integrating Firebug with Scorch
+# Integrating VFS with Scorch
 
-This document shows **exactly** how to integrate Firebug's storage abstraction into Scorch.
+This document shows **exactly** how to integrate VFS's storage abstraction into Scorch.
 
 ## The Hybrid Approach (Recommended)
 
@@ -31,7 +31,7 @@ type Scorch struct {
     path          string
 
     // ADD THIS: Directory for segment storage
-    segmentDir    firebug.Directory  // ← NEW FIELD
+    segmentDir    vfs.Directory  // ← NEW FIELD
 
     unsafeBatch bool
     // ... rest of fields
@@ -60,7 +60,7 @@ func NewScorch(storeName string,
     }
 
     // NEW: Check if custom directory is provided
-    if dirConfig, ok := config["segmentDirectory"].(firebug.Directory); ok {
+    if dirConfig, ok := config["segmentDirectory"].(vfs.Directory); ok {
         rv.segmentDir = dirConfig
     }
 
@@ -83,7 +83,7 @@ func (s *Scorch) openBolt() error {
     // NEW: If no segment directory provided, use filesystem
     if s.segmentDir == nil {
         var err error
-        s.segmentDir, err = firebug.NewFSDirectory(s.path)
+        s.segmentDir, err = vfs.NewFSDirectory(s.path)
         if err != nil {
             return fmt.Errorf("failed to create filesystem directory: %w", err)
         }
@@ -135,7 +135,7 @@ filenames, newSegmentPaths, err := prepareBoltSnapshot(snapshot, tx, s.path, s.s
 And update `persistToDirectory` to use our Directory interface:
 
 ```go
-func persistSegmentToDirectory(seg segment.UnpersistedSegment, dir firebug.Directory, path string) error {
+func persistSegmentToDirectory(seg segment.UnpersistedSegment, dir vfs.Directory, path string) error {
     if dir == nil {
         return seg.Persist(path)
     }
@@ -194,7 +194,7 @@ func (s *Scorch) loadSegment(segmentBucket *bolt.Bucket) (*SegmentSnapshot, erro
 func (s *Scorch) openSegmentFile(path string) (segment.Segment, error) {
     // For S3 or other non-filesystem directories, we need to download
     // the file to local cache and open it from there
-    if cached, ok := s.segmentDir.(firebug.CachedDirectory); ok {
+    if cached, ok := s.segmentDir.(vfs.CachedDirectory); ok {
         return s.openSegmentCached(path, cached)
     }
 
@@ -202,7 +202,7 @@ func (s *Scorch) openSegmentFile(path string) (segment.Segment, error) {
     return s.segPlugin.Open(path)
 }
 
-func (s *Scorch) openSegmentCached(name string, dir firebug.CachedDirectory) (segment.Segment, error) {
+func (s *Scorch) openSegmentCached(name string, dir vfs.CachedDirectory) (segment.Segment, error) {
     // Download segment to local temp location
     r, err := dir.Open(filepath.Base(name))
     if err != nil {
@@ -336,7 +336,7 @@ import (
     "github.com/aws/aws-sdk-go-v2/config"
     "github.com/aws/aws-sdk-go-v2/service/s3"
     "github.com/blevesearch/bleve/v2"
-    "github.com/blevesearch/bleve/v2/index/scorch/firebug"
+    "github.com/blevesearch/bleve/v2/index/scorch/vfs"
     "github.com/blevesearch/bleve/v2/mapping"
 )
 
@@ -346,12 +346,12 @@ func main() {
     s3Client := s3.NewFromConfig(cfg)
 
     // Create S3 directory for segments
-    segmentDir, _ := firebug.NewS3Directory(firebug.S3DirectoryConfig{
+    segmentDir, _ := vfs.NewS3Directory(vfs.S3DirectoryConfig{
         Bucket:   "my-index-bucket",
         Prefix:   "indexes/my-index",
         S3Client: s3Client,
         CacheDir: "/tmp/bleve-cache",
-        CacheConfig: firebug.CacheConfig{
+        CacheConfig: vfs.CacheConfig{
             MaxCacheSizeBytes: 2 * 1024 * 1024 * 1024, // 2GB cache
             MaxCacheEntries:   1000,
             EvictionPolicy:    "lru",
@@ -376,17 +376,17 @@ func main() {
 
     // Index some data
     index.Index("doc1", map[string]interface{}{
-        "title": "Hello Firebug",
+        "title": "Hello VFS",
         "body":  "This segment is stored in S3!",
     })
 
     // Search works normally
-    query := bleve.NewMatchQuery("firebug")
+    query := bleve.NewMatchQuery("vfs")
     search := bleve.NewSearchRequest(query)
     results, _ := index.Search(search)
 
     // Check cache stats
-    if cached, ok := segmentDir.(firebug.CachedDirectory); ok {
+    if cached, ok := segmentDir.(vfs.CachedDirectory); ok {
         stats := cached.CacheStats()
         fmt.Printf("Cache hit rate: %.2f%%\n", stats.HitRate * 100)
         fmt.Printf("Cache size: %d bytes\n", stats.CacheSizeBytes)
@@ -398,7 +398,7 @@ func main() {
 
 ### Minimal Changes to Scorch Core:
 
-1. **Add field**: `segmentDir firebug.Directory` to Scorch struct
+1. **Add field**: `segmentDir vfs.Directory` to Scorch struct
 2. **Initialize field**: In `NewScorch()` and `openBolt()`
 3. **Replace calls**:
    - `os.ReadDir()` → `s.segmentDir.ReadDir()`

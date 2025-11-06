@@ -1,8 +1,8 @@
-# Firebug Implementation Notes
+# VFS Implementation Notes
 
 ## Overview
 
-Firebug is a storage abstraction layer for Bleve's Scorch index that decouples filesystem operations from the core indexing logic. This document describes the implementation details, design decisions, and future integration steps.
+VFS is a storage abstraction layer for Bleve's Scorch index that decouples filesystem operations from the core indexing logic. This document describes the implementation details, design decisions, and future integration steps.
 
 ## Architecture
 
@@ -87,7 +87,7 @@ This interface was designed to be:
 ## File Structure
 
 ```
-index/scorch/firebug/
+index/scorch/vfs/
 ├── README.md                    # User-facing documentation
 ├── IMPLEMENTATION_NOTES.md      # This file
 ├── directory.go                 # Core Directory interface
@@ -105,7 +105,7 @@ index/scorch/firebug/
 
 ### Current Status
 
-Firebug is currently a **standalone package** that can be used independently or integrated into Scorch. The Directory interface is designed to replace filesystem operations in:
+VFS is currently a **standalone package** that can be used independently or integrated into Scorch. The Directory interface is designed to replace filesystem operations in:
 
 1. **scorch.go**:
    - `openBolt()`: Replace path handling with Directory
@@ -126,7 +126,7 @@ Firebug is currently a **standalone package** that can be used independently or 
 
 ### Integration Steps
 
-To fully integrate Firebug into Scorch:
+To fully integrate VFS into Scorch:
 
 #### Phase 1: Add Directory to Scorch struct
 
@@ -340,7 +340,7 @@ See README.md Roadmap section for planned features.
 
 ### Backward Compatibility
 
-Firebug is designed to be **100% backward compatible** with existing Scorch indexes:
+VFS is designed to be **100% backward compatible** with existing Scorch indexes:
 
 1. **Filesystem indexes**: Can be opened with FSDirectory using the same path
 2. **Configuration**: Falls back to filesystem if no Directory config is provided
@@ -352,14 +352,14 @@ To migrate an existing index from filesystem to S3:
 
 ```go
 // 1. Open with FSDirectory
-fsDir, _ := firebug.NewFSDirectory("/path/to/index")
+fsDir, _ := vfs.NewFSDirectory("/path/to/index")
 fsIndex, _ := bleve.OpenUsing("/path/to/index", map[string]interface{}{
     "directory": fsDir,
 })
 
 // 2. Copy to S3 (using CopyTo method)
-s3Dir, _ := firebug.NewS3Directory(s3Config)
-fsIndex.(firebug.IndexCopyable).CopyTo(s3Dir)
+s3Dir, _ := vfs.NewS3Directory(s3Config)
+fsIndex.(vfs.IndexCopyable).CopyTo(s3Dir)
 
 // 3. Close filesystem index
 fsIndex.Close()
@@ -372,7 +372,7 @@ s3Index, _ := bleve.OpenUsing("s3://bucket/prefix", map[string]interface{}{
 
 ## Contributing
 
-To contribute to Firebug:
+To contribute to VFS:
 
 1. **Code style**: Follow standard Go conventions (gofmt, golint)
 2. **Testing**: All new code must have tests

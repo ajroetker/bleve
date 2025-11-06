@@ -1,8 +1,8 @@
-# Can Firebug Be Used in Scorch? YES! ✅
+# Can VFS Be Used in Scorch? YES! ✅
 
 ## TL;DR
 
-**Yes, Firebug CAN be used in Scorch with minimal changes (~200 lines of code).**
+**Yes, VFS CAN be used in Scorch with minimal changes (~200 lines of code).**
 
 We've proven this with:
 - ✅ Working `HybridDirectory` implementation
@@ -99,7 +99,7 @@ $ go test -v
 === RUN   ExampleHybridDirectory
 --- PASS: ExampleHybridDirectory (0.00s)
 PASS
-ok      github.com/blevesearch/bleve/v2/index/scorch/firebug    0.037s
+ok      github.com/blevesearch/bleve/v2/index/scorch/vfs    0.037s
 ```
 
 **8/8 tests passing** ✅
@@ -110,15 +110,15 @@ ok      github.com/blevesearch/bleve/v2/index/scorch/firebug    0.037s
 
 1. **Add field to Scorch struct** (1 line)
    ```go
-   segmentDir firebug.Directory
+   segmentDir vfs.Directory
    ```
 
 2. **Initialize in NewScorch** (~10 lines)
    ```go
-   if dirConfig, ok := config["segmentDirectory"].(firebug.Directory); ok {
+   if dirConfig, ok := config["segmentDirectory"].(vfs.Directory); ok {
        rv.segmentDir = dirConfig
    } else {
-       rv.segmentDir, _ = firebug.NewFSDirectory(path)
+       rv.segmentDir, _ = vfs.NewFSDirectory(path)
    }
    ```
 
@@ -149,12 +149,12 @@ cfg, _ := config.LoadDefaultConfig(context.Background())
 s3Client := s3.NewFromConfig(cfg)
 
 // Create S3 directory for segments
-segmentDir, _ := firebug.NewS3Directory(firebug.S3DirectoryConfig{
+segmentDir, _ := vfs.NewS3Directory(vfs.S3DirectoryConfig{
     Bucket:   "my-index-bucket",
     Prefix:   "indexes/my-index",
     S3Client: s3Client,
     CacheDir: "/tmp/bleve-cache",
-    CacheConfig: firebug.CacheConfig{
+    CacheConfig: vfs.CacheConfig{
         MaxCacheSizeBytes: 2 * 1024 * 1024 * 1024, // 2GB
         MaxCacheEntries:   1000,
         EvictionPolicy:    "lru",
@@ -162,10 +162,10 @@ segmentDir, _ := firebug.NewS3Directory(firebug.S3DirectoryConfig{
 })
 
 // Create metadata directory (local)
-metadataDir, _ := firebug.NewFSDirectory("/var/bleve/metadata")
+metadataDir, _ := vfs.NewFSDirectory("/var/bleve/metadata")
 
 // Create hybrid directory
-hybrid := firebug.NewHybridDirectory(segmentDir, metadataDir)
+hybrid := vfs.NewHybridDirectory(segmentDir, metadataDir)
 
 // Create Scorch index with S3 storage
 index, _ := bleve.NewUsing("/var/bleve/metadata", mapping,
@@ -231,9 +231,9 @@ index, _ := bleve.Open("/path/to/index")
 
 ### Scenario 2: S3 Backend for Segments
 ```go
-segmentDir := firebug.NewS3Directory(s3Config)
-metadataDir := firebug.NewFSDirectory("/var/metadata")
-hybrid := firebug.NewHybridDirectory(segmentDir, metadataDir)
+segmentDir := vfs.NewS3Directory(s3Config)
+metadataDir := vfs.NewFSDirectory("/var/metadata")
+hybrid := vfs.NewHybridDirectory(segmentDir, metadataDir)
 
 index, _ := bleve.NewUsing("/var/metadata", mapping,
     "scorch", "scorch", map[string]interface{}{
@@ -244,11 +244,11 @@ index, _ := bleve.NewUsing("/var/metadata", mapping,
 ### Scenario 3: Multiple Read Replicas
 ```go
 // Writer
-writerDir := firebug.NewS3Directory(s3Config)
+writerDir := vfs.NewS3Directory(s3Config)
 writer.Index("doc", data)
 
 // Readers (different servers)
-readerDir := firebug.NewS3Directory(s3Config)
+readerDir := vfs.NewS3Directory(s3Config)
 reader1.Search(query) // Reads same S3 segments
 reader2.Search(query) // Reads same S3 segments
 ```
@@ -258,14 +258,14 @@ reader2.Search(query) // Reads same S3 segments
 // Lambda function
 func handleQuery(event Event) {
     // Segments cached in /tmp (Lambda temp storage)
-    segmentDir := firebug.NewS3Directory(firebug.S3DirectoryConfig{
+    segmentDir := vfs.NewS3Directory(vfs.S3DirectoryConfig{
         CacheDir: "/tmp/bleve-cache",
         // ... S3 config
     })
 
     // Metadata also in /tmp
-    metadataDir := firebug.NewFSDirectory("/tmp/metadata")
-    hybrid := firebug.NewHybridDirectory(segmentDir, metadataDir)
+    metadataDir := vfs.NewFSDirectory("/tmp/metadata")
+    hybrid := vfs.NewHybridDirectory(segmentDir, metadataDir)
 
     index, _ := openIndex(hybrid)
     results, _ := index.Search(query)
@@ -294,7 +294,7 @@ func handleQuery(event Event) {
 
 ## Conclusion
 
-**YES, Firebug can absolutely be used in Scorch!**
+**YES, VFS can absolutely be used in Scorch!**
 
 Evidence:
 1. ✅ **Proven with working code** - HybridDirectory + DirectoryAdapter
