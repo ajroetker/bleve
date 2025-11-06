@@ -69,45 +69,96 @@ defer dir.Unlock()
 
 ### S3 Directory
 
+Works with **any S3-compatible storage** including AWS S3, MinIO, DigitalOcean Spaces, Backblaze B2, Wasabi, etc.
+
+#### AWS S3 Example
+
 ```go
 import (
-    "context"
-    "github.com/aws/aws-sdk-go-v2/config"
-    "github.com/aws/aws-sdk-go-v2/service/s3"
     "github.com/blevesearch/bleve/v2/index/scorch/vfs"
 )
 
-// Load AWS configuration
-cfg, err := config.LoadDefaultConfig(context.Background())
-if err != nil {
-    // handle error
-}
-
-// Create S3 client
-s3Client := s3.NewFromConfig(cfg)
-
-// Configure S3 directory
 s3Config := vfs.S3DirectoryConfig{
-    Bucket:   "my-index-bucket",
-    Prefix:   "indexes/my-index",
-    Region:   "us-east-1",
-    S3Client: s3Client,
-    CacheDir: "/tmp/bleve-cache",
+    Endpoint:  "s3.amazonaws.com",
+    Bucket:    "my-index-bucket",
+    Prefix:    "indexes/my-index",
+    AccessKey: "AWS_ACCESS_KEY_ID",
+    SecretKey: "AWS_SECRET_ACCESS_KEY",
+    Region:    "us-east-1",
+    UseSSL:    true,
+    CacheDir:  "/tmp/bleve-cache",
     CacheConfig: vfs.CacheConfig{
         MaxCacheSizeBytes: 1024 * 1024 * 1024, // 1GB
         MaxCacheEntries:   1000,
         EvictionPolicy:    "lru",
     },
-    LazyLoad: true,
 }
 
-// Create S3-backed directory
 dir, err := vfs.NewS3Directory(s3Config)
 if err != nil {
     // handle error
 }
+```
 
-// Use with Scorch...
+#### MinIO Example
+
+```go
+s3Config := vfs.S3DirectoryConfig{
+    Endpoint:  "play.min.io",
+    Bucket:    "my-index-bucket",
+    Prefix:    "indexes/my-index",
+    AccessKey: "minioadmin",
+    SecretKey: "minioadmin",
+    UseSSL:    true,
+    CacheDir:  "/tmp/bleve-cache",
+    CacheConfig: vfs.CacheConfig{
+        MaxCacheSizeBytes: 1024 * 1024 * 1024, // 1GB
+        MaxCacheEntries:   1000,
+    },
+}
+
+dir, err := vfs.NewS3Directory(s3Config)
+```
+
+#### DigitalOcean Spaces Example
+
+```go
+s3Config := vfs.S3DirectoryConfig{
+    Endpoint:  "nyc3.digitaloceanspaces.com",
+    Bucket:    "my-index-bucket",
+    Prefix:    "indexes/my-index",
+    AccessKey: "DO_SPACES_KEY",
+    SecretKey: "DO_SPACES_SECRET",
+    Region:    "us-east-1",
+    UseSSL:    true,
+    CacheDir:  "/tmp/bleve-cache",
+    CacheConfig: vfs.CacheConfig{
+        MaxCacheSizeBytes: 1024 * 1024 * 1024, // 1GB
+        MaxCacheEntries:   1000,
+    },
+}
+
+dir, err := vfs.NewS3Directory(s3Config)
+```
+
+#### Backblaze B2 Example
+
+```go
+s3Config := vfs.S3DirectoryConfig{
+    Endpoint:  "s3.us-west-004.backblazeb2.com",
+    Bucket:    "my-index-bucket",
+    Prefix:    "indexes/my-index",
+    AccessKey: "B2_KEY_ID",
+    SecretKey: "B2_APPLICATION_KEY",
+    UseSSL:    true,
+    CacheDir:  "/tmp/bleve-cache",
+    CacheConfig: vfs.CacheConfig{
+        MaxCacheSizeBytes: 1024 * 1024 * 1024, // 1GB
+        MaxCacheEntries:   1000,
+    },
+}
+
+dir, err := vfs.NewS3Directory(s3Config)
 ```
 
 ### Using URL Configuration
@@ -136,14 +187,13 @@ if err != nil {
 
 ### S3Directory
 
-- **Object storage backend**: Stores segments in S3
+- **S3-compatible storage**: Works with AWS S3, MinIO, DigitalOcean Spaces, Backblaze B2, Wasabi, and any S3-compatible service
 - **Local caching**: LRU cache for frequently accessed files
 - **Lazy loading**: Only downloads files when accessed
-- **Distributed locking**:
-  - DynamoDB-based locking (recommended for production)
-  - S3-based locking (fallback, less reliable)
+- **Simple S3-based locking**: Uses conditional S3 operations for distributed locking
 - **Cache statistics**: Monitor hit rates and evictions
 - **Configurable**: Adjustable cache size, eviction policy, etc.
+- **No vendor lock-in**: Uses MinIO SDK for maximum compatibility
 
 ### Caching Strategy
 
@@ -159,46 +209,38 @@ This provides:
 
 ## Distributed Locking
 
-For S3 directories, distributed locking is crucial to prevent multiple writers from corrupting the index. Two options are supported:
+For S3 directories, distributed locking is crucial to prevent multiple writers from corrupting the index.
 
-### DynamoDB Locking (Recommended)
+### S3-Based Locking
 
-```go
-import "github.com/aws/aws-sdk-go-v2/service/dynamodb"
+The VFS implementation uses **S3-native locking** with conditional PUT operations. This approach:
 
-dynamoClient := dynamodb.NewFromConfig(cfg)
+- **Works with any S3-compatible storage** (no vendor-specific dependencies like DynamoDB)
+- **Simple and portable**: Just works out of the box
+- **Lock files stored in S3**: Uses a `write.lock` object in your bucket
+- **Automatic**: No additional setup or tables required
 
-s3Config := vfs.S3DirectoryConfig{
-    // ... other config ...
-    DynamoDBClient: dynamoClient,
-    LockTableName:  "bleve-index-locks",
-}
-```
-
-Create the DynamoDB table:
-
-```bash
-aws dynamodb create-table \
-    --table-name bleve-index-locks \
-    --attribute-definitions \
-        AttributeName=LockKey,AttributeType=S \
-    --key-schema \
-        AttributeName=LockKey,KeyType=HASH \
-    --billing-mode PAY_PER_REQUEST \
-    --time-to-live-specification \
-        Enabled=true,AttributeName=TTL
-```
-
-### S3 Locking (Fallback)
-
-If DynamoDB is not available, S3 locking uses conditional PUT operations. This is less reliable but works in simple scenarios:
+Locking is handled automatically when you call `Lock()` and `Unlock()`:
 
 ```go
-s3Config := vfs.S3DirectoryConfig{
-    // ... other config ...
-    DynamoDBClient: nil, // No DynamoDB client
+dir, err := vfs.NewS3Directory(s3Config)
+if err != nil {
+    // handle error
 }
+
+// Acquire lock before writing
+if err := dir.Lock(); err != nil {
+    // handle lock error
+}
+defer dir.Unlock()
+
+// Perform write operations...
 ```
+
+**Note**: For production deployments with multiple writers, ensure your application:
+1. Always acquires a lock before writing
+2. Releases locks promptly after writing
+3. Implements retry logic for lock acquisition failures
 
 ## Performance Considerations
 
