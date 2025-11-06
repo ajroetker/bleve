@@ -361,6 +361,30 @@ func (d *S3Directory) CacheStats() CacheStats {
 	return *stats
 }
 
+// GetCachePath returns the local filesystem path where the file is cached.
+// If the file is not yet cached, it downloads and caches it first.
+func (d *S3Directory) GetCachePath(name string) (string, error) {
+	// Check if already in cache
+	if cachedPath, ok := d.cache.get(name); ok {
+		return cachedPath, nil
+	}
+
+	// Not in cache - download it (this will cache it automatically)
+	r, err := d.Open(name)
+	if err != nil {
+		return "", fmt.Errorf("failed to download file for caching: %w", err)
+	}
+	r.Close() // Open() already cached the file
+
+	// Now it should be in cache
+	cachedPath, ok := d.cache.get(name)
+	if !ok {
+		return "", fmt.Errorf("file was not cached after download")
+	}
+
+	return cachedPath, nil
+}
+
 // s3Key constructs the full S3 key for a given name.
 func (d *S3Directory) s3Key(name string) string {
 	if d.prefix == "" {

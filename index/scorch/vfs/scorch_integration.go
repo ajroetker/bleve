@@ -195,44 +195,19 @@ func (d *DirectoryAdapter) GetAbsolutePath(name string) string {
 }
 
 // OpenSegment opens a segment file and returns a path that segment
-// plugins can use. For S3 directories, this downloads the file to
-// a local cache and returns the cache path.
+// plugins can use. For S3 directories, this returns the local cache path.
 func (d *DirectoryAdapter) OpenSegment(name string) (string, io.Closer, error) {
 	// Check if this is a cached directory (S3Directory)
 	if cached, ok := d.dir.(CachedDirectory); ok {
-		// For cached directories, ensure file is in local cache
-		r, err := d.dir.Open(name)
+		// Get the local cache path (downloads if not cached)
+		cachePath, err := cached.GetCachePath(name)
 		if err != nil {
-			return "", nil, err
-		}
-		defer r.Close()
-
-		// Read file into memory
-		data, err := io.ReadAll(r)
-		if err != nil {
-			return "", nil, err
+			return "", nil, fmt.Errorf("failed to get cache path: %w", err)
 		}
 
-		// Get cache stats to find local path
-		// This is a workaround - in a real implementation, we'd expose
-		// a GetCachePath method on CachedDirectory
-		_ = cached.CacheStats()
-
-		// For now, create a temp file
-		tmpFile, err := os.CreateTemp("", "segment-*.zap")
-		if err != nil {
-			return "", nil, err
-		}
-
-		if _, err := tmpFile.Write(data); err != nil {
-			tmpFile.Close()
-			os.Remove(tmpFile.Name())
-			return "", nil, err
-		}
-
-		tmpFile.Close()
-
-		return tmpFile.Name(), &segmentCloser{path: tmpFile.Name()}, nil
+		// Return the cache path with a no-op closer
+		// The cache manages the file lifecycle, so we don't need to delete it
+		return cachePath, io.NopCloser(nil), nil
 	}
 
 	// For filesystem directories, just return the real path
@@ -242,15 +217,6 @@ func (d *DirectoryAdapter) OpenSegment(name string) (string, io.Closer, error) {
 	}
 
 	return "", nil, fmt.Errorf("unsupported directory type for segment opening")
-}
-
-type segmentCloser struct {
-	path string
-}
-
-func (c *segmentCloser) Close() error {
-	// Clean up temp file
-	return os.Remove(c.path)
 }
 
 // Ensure HybridDirectory implements Directory

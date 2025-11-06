@@ -91,6 +91,11 @@ type CachedDirectory interface {
 
 	// CacheStats returns statistics about cache performance
 	CacheStats() CacheStats
+
+	// GetCachePath returns the local filesystem path where the file is cached.
+	// If the file is not yet cached, it will be downloaded/cached first.
+	// This is useful for segment plugins that need direct filesystem access.
+	GetCachePath(name string) (string, error)
 }
 
 // CacheConfig configures caching behavior for CachedDirectory implementations
