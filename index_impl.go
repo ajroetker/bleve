@@ -848,7 +848,7 @@ func (i *indexImpl) SearchInContext(ctx context.Context, req *SearchRequest) (sr
 				facetsBuilder.Add(facetName, facetBuilder)
 			} else {
 				// build terms facet
-				facetBuilder, err := facet.NewTermsFacetBuilder(facetRequest.Field, facetRequest.Size, facetRequest.Prefix, facetRequest.Pattern)
+				facetBuilder, err := facet.NewTermsFacetBuilder(facetRequest.Field, facetRequest.Size, facetRequest.TermPrefix, facetRequest.TermPattern)
 				if err != nil {
 					return nil, fmt.Errorf("error creating terms facet '%s': %v", facetName, err)
 				}
