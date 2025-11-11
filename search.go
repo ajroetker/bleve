@@ -145,10 +145,24 @@ type numericRange struct {
 // of the result document set you would like to be
 // built.
 type FacetRequest struct {
-	Size           int              `json:"size"`
-	Field          string           `json:"field"`
-	TermPrefix     string           `json:"term_prefix,omitempty"`
-	TermPattern    string           `json:"term_pattern,omitempty"`
+	Size  int    `json:"size"`
+	Field string `json:"field"`
+
+	// TermPrefix filters facet terms to only those starting with the specified prefix.
+	// Useful for search-as-you-type faceting where you want to show facet counts for
+	// terms matching what the user is typing. For example, when a user types "sn" into
+	// a search bar, you can filter facets to show only terms starting with "sn" broken
+	// down by field (e.g., product:"snacks", description:"snorkel", title:"snow").
+	// Uses zero-allocation bytes.HasPrefix for efficiency.
+	TermPrefix string `json:"term_prefix,omitempty"`
+
+	// TermPattern filters facet terms to only those matching the specified regex pattern.
+	// Useful for faceting on structured data (e.g., product codes like "ABC-1234") or
+	// combining with TermPrefix for more complex filtering. When both TermPrefix and
+	// TermPattern are specified, terms must match both (AND logic).
+	// Uses zero-allocation regexp.Match for efficiency.
+	TermPattern string `json:"term_pattern,omitempty"`
+
 	NumericRanges  []*numericRange  `json:"numeric_ranges,omitempty"`
 	DateTimeRanges []*dateTimeRange `json:"date_ranges,omitempty"`
 }
