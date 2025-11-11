@@ -147,6 +147,8 @@ type numericRange struct {
 type FacetRequest struct {
 	Size           int              `json:"size"`
 	Field          string           `json:"field"`
+	Prefix         string           `json:"prefix,omitempty"`
+	Pattern        string           `json:"pattern,omitempty"`
 	NumericRanges  []*numericRange  `json:"numeric_ranges,omitempty"`
 	DateTimeRanges []*dateTimeRange `json:"date_ranges,omitempty"`
 }
