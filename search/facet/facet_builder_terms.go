@@ -42,18 +42,6 @@ type TermsFacetBuilder struct {
 	sawValue    bool
 }
 
-// NewTermsFacetBuilder creates a new TermsFacetBuilder for the specified field.
-//
-// Parameters:
-//   - field: The field to facet on
-//   - size: Maximum number of facet terms to return (top N by count)
-//   - prefix: Optional prefix filter - only terms starting with this string are included.
-//     Useful for search-as-you-type faceting. Pass empty string for no prefix filtering.
-//   - pattern: Optional regex pattern - only terms matching this pattern are included.
-//     Pass empty string for no pattern filtering.
-//
-// When both prefix and pattern are provided, terms must match both (AND logic).
-// Returns an error if the regex pattern is invalid.
 func NewTermsFacetBuilder(field string, size int, prefix, pattern string) (*TermsFacetBuilder, error) {
 	fb := &TermsFacetBuilder{
 		size:       size,
@@ -96,15 +84,6 @@ func (fb *TermsFacetBuilder) Field() string {
 	return fb.field
 }
 
-// UpdateVisitor is called for each term in each document during search.
-// It applies prefix and/or regex filtering before counting terms.
-//
-// The filtering uses zero-allocation techniques (bytes.HasPrefix and regexp.Match)
-// to avoid string conversions for non-matching terms. This is especially beneficial
-// for search-as-you-type faceting where most terms don't match the filter.
-//
-// Non-matching terms still contribute to the Total count but are excluded from
-// the facet results and counted in Other.
 func (fb *TermsFacetBuilder) UpdateVisitor(term []byte) {
 	// Fast prefix check on []byte - zero allocation
 	if len(fb.prefixBytes) > 0 && !bytes.HasPrefix(term, fb.prefixBytes) {
