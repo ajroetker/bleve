@@ -32,7 +32,7 @@ func TestSumAggregation(t *testing.T) {
 		// Convert to prefix-coded bytes
 		i64 := numeric.Float64ToInt64(val)
 		prefixCoded := numeric.MustNewPrefixCodedInt64(i64, 0)
-		agg.UpdateVisitor(prefixCoded)
+		agg.UpdateVisitor(agg.Field(), prefixCoded)
 		agg.EndDoc()
 	}
 
@@ -57,7 +57,7 @@ func TestAvgAggregation(t *testing.T) {
 		agg.StartDoc()
 		i64 := numeric.Float64ToInt64(val)
 		prefixCoded := numeric.MustNewPrefixCodedInt64(i64, 0)
-		agg.UpdateVisitor(prefixCoded)
+		agg.UpdateVisitor(agg.Field(), prefixCoded)
 		agg.EndDoc()
 	}
 
@@ -78,7 +78,7 @@ func TestMinAggregation(t *testing.T) {
 		agg.StartDoc()
 		i64 := numeric.Float64ToInt64(val)
 		prefixCoded := numeric.MustNewPrefixCodedInt64(i64, 0)
-		agg.UpdateVisitor(prefixCoded)
+		agg.UpdateVisitor(agg.Field(), prefixCoded)
 		agg.EndDoc()
 	}
 
@@ -99,7 +99,7 @@ func TestMaxAggregation(t *testing.T) {
 		agg.StartDoc()
 		i64 := numeric.Float64ToInt64(val)
 		prefixCoded := numeric.MustNewPrefixCodedInt64(i64, 0)
-		agg.UpdateVisitor(prefixCoded)
+		agg.UpdateVisitor(agg.Field(), prefixCoded)
 		agg.EndDoc()
 	}
 
@@ -120,7 +120,7 @@ func TestCountAggregation(t *testing.T) {
 		agg.StartDoc()
 		i64 := numeric.Float64ToInt64(val)
 		prefixCoded := numeric.MustNewPrefixCodedInt64(i64, 0)
-		agg.UpdateVisitor(prefixCoded)
+		agg.UpdateVisitor(agg.Field(), prefixCoded)
 		agg.EndDoc()
 	}
 
@@ -141,7 +141,7 @@ func TestSumSquaresAggregation(t *testing.T) {
 		agg.StartDoc()
 		i64 := numeric.Float64ToInt64(val)
 		prefixCoded := numeric.MustNewPrefixCodedInt64(i64, 0)
-		agg.UpdateVisitor(prefixCoded)
+		agg.UpdateVisitor(agg.Field(), prefixCoded)
 		agg.EndDoc()
 	}
 
@@ -166,7 +166,7 @@ func TestStatsAggregation(t *testing.T) {
 		agg.StartDoc()
 		i64 := numeric.Float64ToInt64(val)
 		prefixCoded := numeric.MustNewPrefixCodedInt64(i64, 0)
-		agg.UpdateVisitor(prefixCoded)
+		agg.UpdateVisitor(agg.Field(), prefixCoded)
 		agg.EndDoc()
 	}
 
@@ -225,14 +225,14 @@ func TestAggregationIgnoresNonZeroShift(t *testing.T) {
 	agg.StartDoc()
 	i64 := numeric.Float64ToInt64(10.0)
 	prefixCoded := numeric.MustNewPrefixCodedInt64(i64, 0)
-	agg.UpdateVisitor(prefixCoded)
+	agg.UpdateVisitor(agg.Field(), prefixCoded)
 	agg.EndDoc()
 
 	// Add value with shift = 4 (should be ignored)
 	agg.StartDoc()
 	i64 = numeric.Float64ToInt64(20.0)
 	prefixCoded = numeric.MustNewPrefixCodedInt64(i64, 4)
-	agg.UpdateVisitor(prefixCoded)
+	agg.UpdateVisitor(agg.Field(), prefixCoded)
 	agg.EndDoc()
 
 	result := agg.Result()
