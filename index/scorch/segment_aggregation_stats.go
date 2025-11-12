@@ -55,15 +55,14 @@ func ComputeSegmentAggregationStats(seg segment.Segment, field string, deleted [
 	}
 
 	// Iterate through all terms in the dictionary
-	itr := dict.AutomatonIterator(nil, nil, nil)
-	defer func() {
-		_ = itr.Close()
-	}()
+	var postings segment.PostingsList
+	var postingsItr segment.PostingsIterator
 
-	tfd, err := itr.Next()
-	for tfd != nil && err == nil {
+	dictItr := dict.AutomatonIterator(nil, nil, nil)
+	next, err := dictItr.Next()
+	for err == nil && next != nil {
 		// Only process full precision values (shift = 0)
-		prefixCoded := numeric.PrefixCoded(tfd.Term())
+		prefixCoded := numeric.PrefixCoded(next.Term)
 		shift, shiftErr := prefixCoded.Shift()
 		if shiftErr == nil && shift == 0 {
 			i64, parseErr := prefixCoded.Int64()
@@ -71,12 +70,14 @@ func ComputeSegmentAggregationStats(seg segment.Segment, field string, deleted [
 				f64 := numeric.Int64ToFloat64(i64)
 
 				// Get posting list to count occurrences
-				postings, postErr := tfd.Postings()
-				if postErr == nil {
-					posting, postErr := postings.Next()
-					for posting != nil && postErr == nil {
+				var err1 error
+				postings, err1 = dict.PostingsList([]byte(next.Term), nil, postings)
+				if err1 == nil {
+					postingsItr = postings.Iterator(false, false, false, postingsItr)
+					nextPosting, err2 := postingsItr.Next()
+					for err2 == nil && nextPosting != nil {
 						// Skip deleted documents
-						if !deletedMap[posting.Number()] {
+						if !deletedMap[nextPosting.Number()] {
 							stats.Count++
 							stats.Sum += f64
 							stats.SumSquares += f64 * f64
@@ -87,13 +88,15 @@ func ComputeSegmentAggregationStats(seg segment.Segment, field string, deleted [
 								stats.Max = f64
 							}
 						}
-						posting, postErr = postings.Next()
+						nextPosting, err2 = postingsItr.Next()
 					}
-					_ = postings.Close()
+					if err2 != nil {
+						return nil, err2
+					}
 				}
 			}
 		}
-		tfd, err = itr.Next()
+		next, err = dictItr.Next()
 	}
 
 	// If no values found, reset min/max to 0
