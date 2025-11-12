@@ -68,7 +68,7 @@ func NewTermsAggregation(field string, size int, subAggregations map[string]sear
 func (ta *TermsAggregation) Size() int {
 	sizeInBytes := reflectStaticSizeTermsAggregation + size.SizeOfPtr + len(ta.field)
 	for term := range ta.termCounts {
-		sizeInBytes += size.SizeOfString + len(term) + size.SizeOfInt64
+		sizeInBytes += size.SizeOfString + len(term) + 8 // int64 = 8 bytes
 	}
 	return sizeInBytes
 }
@@ -297,7 +297,7 @@ func (ra *RangeAggregation) EndDoc() {
 func (ra *RangeAggregation) Result() *search.AggregationResult {
 	buckets := make([]*search.Bucket, 0, len(ra.ranges))
 
-	for rangeName, r := range ra.ranges {
+	for rangeName := range ra.ranges {
 		bucket := &search.Bucket{
 			Key:   rangeName,
 			Count: ra.rangeCounts[rangeName],

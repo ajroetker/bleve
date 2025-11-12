@@ -152,7 +152,7 @@ func (ar *AggregationResult) Size() int {
 
 	// Add bucket sizes
 	for _, bucket := range ar.Buckets {
-		sizeInBytes += size.SizeOfPtr + size.SizeOfInt64
+		sizeInBytes += size.SizeOfPtr + 8 // int64 count = 8 bytes
 		// Approximate size for key
 		sizeInBytes += size.SizeOfString + 20
 		// Approximate size for sub-aggregations
