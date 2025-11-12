@@ -609,7 +609,7 @@ func (hc *TopNCollector) FacetResults() search.FacetResults {
 }
 
 // AggregationResults returns the computed aggregation results
-func (hc *TopNCollector) AggregationResults() map[string]*search.AggregationResult {
+func (hc *TopNCollector) AggregationResults() search.AggregationResults {
 	if hc.aggregationsBuilder != nil {
 		return hc.aggregationsBuilder.Results()
 	}

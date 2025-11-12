@@ -620,8 +620,8 @@ type SearchResult struct {
 	Cost         uint64                         `json:"cost"`
 	MaxScore     float64                        `json:"max_score"`
 	Took         time.Duration                  `json:"took"`
-	Facets       search.FacetResults            `json:"facets"`
-	Aggregations map[string]*search.AggregationResult `json:"aggregations,omitempty"`
+	Facets       search.FacetResults       `json:"facets"`
+	Aggregations search.AggregationResults `json:"aggregations,omitempty"`
 	// special fields that are applicable only for search
 	// results that are obtained from a presearch
 	SynonymResult search.FieldTermSynonymMap `json:"synonym_result,omitempty"`

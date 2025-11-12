@@ -116,8 +116,8 @@ func (ab *AggregationsBuilder) EndDoc() {
 }
 
 // Results returns all aggregation results
-func (ab *AggregationsBuilder) Results() map[string]*AggregationResult {
-	results := make(map[string]*AggregationResult, len(ab.aggregations))
+func (ab *AggregationsBuilder) Results() AggregationResults {
+	results := make(AggregationResults, len(ab.aggregations))
 	for i, aggregationBuilder := range ab.aggregations {
 		results[ab.aggregationNames[i]] = aggregationBuilder.Result()
 	}
@@ -162,4 +162,88 @@ func (ar *AggregationResult) Size() int {
 	}
 
 	return sizeInBytes
+}
+
+// AggregationResults is a map of aggregation results by name
+type AggregationResults map[string]*AggregationResult
+
+// Merge merges another set of aggregation results into this one
+// This is useful for combining results from multiple index shards
+// Note: avg merging is approximate without storing counts separately
+func (ar AggregationResults) Merge(other AggregationResults) {
+	for name, otherAggResult := range other {
+		aggResult, exists := ar[name]
+		if !exists {
+			// First time seeing this aggregation, just copy it
+			ar[name] = otherAggResult
+			continue
+		}
+
+		// Merge based on aggregation type
+		switch aggResult.Type {
+		case "sum", "sumsquares":
+			// Sum values are additive
+			aggResult.Value = aggResult.Value.(float64) + otherAggResult.Value.(float64)
+
+		case "count":
+			// Counts are additive
+			aggResult.Value = aggResult.Value.(int64) + otherAggResult.Value.(int64)
+
+		case "min":
+			// Take minimum of minimums
+			if otherAggResult.Value.(float64) < aggResult.Value.(float64) {
+				aggResult.Value = otherAggResult.Value
+			}
+
+		case "max":
+			// Take maximum of maximums
+			if otherAggResult.Value.(float64) > aggResult.Value.(float64) {
+				aggResult.Value = otherAggResult.Value
+			}
+
+		case "avg":
+			// Average of averages is approximate - proper merging requires counts
+			// For now, take simple average (limitation)
+			aggResult.Value = (aggResult.Value.(float64) + otherAggResult.Value.(float64)) / 2.0
+
+		case "stats":
+			// Stats merging requires access to component values
+			// This is handled at the aggregation type level
+			// For now, keep first result (limitation)
+
+		case "terms", "range", "date_range":
+			// Merge buckets
+			ar.mergeBuckets(aggResult, otherAggResult)
+		}
+	}
+}
+
+// mergeBuckets merges bucket aggregation results
+func (ar AggregationResults) mergeBuckets(dest, src *AggregationResult) {
+	// Create a map of existing buckets by key
+	bucketMap := make(map[interface{}]*Bucket)
+	for _, bucket := range dest.Buckets {
+		bucketMap[bucket.Key] = bucket
+	}
+
+	// Merge source buckets
+	for _, srcBucket := range src.Buckets {
+		destBucket, exists := bucketMap[srcBucket.Key]
+		if !exists {
+			// New bucket, add it
+			dest.Buckets = append(dest.Buckets, srcBucket)
+			bucketMap[srcBucket.Key] = srcBucket
+		} else {
+			// Existing bucket, merge counts
+			destBucket.Count += srcBucket.Count
+
+			// Merge sub-aggregations recursively
+			if srcBucket.Aggregations != nil {
+				if destBucket.Aggregations == nil {
+					destBucket.Aggregations = make(map[string]*AggregationResult)
+				}
+				AggregationResults(destBucket.Aggregations).Merge(srcBucket.Aggregations)
+			}
+		}
+	}
 }
