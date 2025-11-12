@@ -53,15 +53,9 @@ func ComputeSegmentAggregationStats(seg segment.Segment, field string, deleted [
 	if dict == nil {
 		return stats, nil
 	}
-	defer func() {
-		_ = dict.Close()
-	}()
 
 	// Iterate through all terms in the dictionary
-	itr, err := dict.AutomatonIterator(nil, nil, nil)
-	if err != nil {
-		return nil, err
-	}
+	itr := dict.AutomatonIterator(nil, nil, nil)
 	defer func() {
 		_ = itr.Close()
 	}()
@@ -125,7 +119,11 @@ func GetOrComputeSegmentStats(ss *SegmentSnapshot, field string) (*SegmentAggreg
 	// Compute stats
 	var deleted []uint64
 	if ss.deleted != nil {
-		deleted = ss.deleted.ToArray()
+		deletedArray := ss.deleted.ToArray()
+		deleted = make([]uint64, len(deletedArray))
+		for i, d := range deletedArray {
+			deleted[i] = uint64(d)
+		}
 	}
 
 	stats, err := ComputeSegmentAggregationStats(ss.segment, field, deleted)
