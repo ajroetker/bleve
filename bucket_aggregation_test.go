@@ -97,26 +97,26 @@ func TestBucketAggregations(t *testing.T) {
 			t.Fatalf("Expected 3 buckets, got %d", len(byBrand.Buckets))
 		}
 
-		// Check Samsung bucket (should have 3 docs)
+		// Check samsung bucket (should have 3 docs) - note: lowercase due to text analysis
 		var samsungBucket *search.Bucket
 		for _, bucket := range byBrand.Buckets {
-			if bucket.Key == "Samsung" {
+			if bucket.Key == "samsung" {
 				samsungBucket = bucket
 				break
 			}
 		}
 
 		if samsungBucket == nil {
-			t.Fatal("Samsung bucket not found")
+			t.Fatal("samsung bucket not found")
 		}
 
 		if samsungBucket.Count != 3 {
-			t.Fatalf("Expected Samsung count 3, got %d", samsungBucket.Count)
+			t.Fatalf("Expected samsung count 3, got %d", samsungBucket.Count)
 		}
 
 		// Check sub-aggregations
 		if samsungBucket.Aggregations == nil {
-			t.Fatal("Expected sub-aggregations in Samsung bucket")
+			t.Fatal("Expected sub-aggregations in samsung bucket")
 		}
 
 		avgPrice := samsungBucket.Aggregations["avg_price"]
@@ -124,21 +124,21 @@ func TestBucketAggregations(t *testing.T) {
 			t.Fatal("Expected avg_price sub-aggregation")
 		}
 
-		// Samsung avg: (799 + 899 + 599) / 3 = 765.67
+		// samsung avg: (799 + 899 + 599) / 3 = 765.67
 		expectedAvg := 765.67
 		actualAvg := avgPrice.Value.(float64)
 		if actualAvg < expectedAvg-1 || actualAvg > expectedAvg+1 {
-			t.Fatalf("Expected Samsung avg price around %f, got %f", expectedAvg, actualAvg)
+			t.Fatalf("Expected samsung avg price around %f, got %f", expectedAvg, actualAvg)
 		}
 
 		minPrice := samsungBucket.Aggregations["min_price"]
 		if minPrice.Value.(float64) != 599.00 {
-			t.Fatalf("Expected Samsung min price 599, got %f", minPrice.Value.(float64))
+			t.Fatalf("Expected samsung min price 599, got %f", minPrice.Value.(float64))
 		}
 
 		maxPrice := samsungBucket.Aggregations["max_price"]
 		if maxPrice.Value.(float64) != 899.00 {
-			t.Fatalf("Expected Samsung max price 899, got %f", maxPrice.Value.(float64))
+			t.Fatalf("Expected samsung max price 899, got %f", maxPrice.Value.(float64))
 		}
 	})
 
@@ -148,7 +148,6 @@ func TestBucketAggregations(t *testing.T) {
 		searchRequest := NewSearchRequest(query)
 
 		// Create price ranges
-		low := 500.0
 		mid := 800.0
 		high := 1000.0
 

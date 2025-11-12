@@ -216,7 +216,7 @@ func TestAggregations(t *testing.T) {
 	// Test aggregations with filtered query
 	t.Run("Filtered", func(t *testing.T) {
 		// Query for price >= 20
-		query := NewNumericRangeQuery(nil, Float64Ptr(20.0))
+		query := NewNumericRangeQuery(Float64Ptr(20.0), nil)
 		query.SetField("price")
 		searchRequest := NewSearchRequest(query)
 		searchRequest.Aggregations = AggregationsRequest{
