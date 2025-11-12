@@ -35,6 +35,7 @@ import (
 	"github.com/blevesearch/bleve/v2/mapping"
 	"github.com/blevesearch/bleve/v2/registry"
 	"github.com/blevesearch/bleve/v2/search"
+	"github.com/blevesearch/bleve/v2/search/aggregation"
 	"github.com/blevesearch/bleve/v2/search/collector"
 	"github.com/blevesearch/bleve/v2/search/facet"
 	"github.com/blevesearch/bleve/v2/search/highlight"
@@ -855,6 +856,34 @@ func (i *indexImpl) SearchInContext(ctx context.Context, req *SearchRequest) (sr
 		coll.SetFacetsBuilder(facetsBuilder)
 	}
 
+	// build aggregations if requested
+	if req.Aggregations != nil {
+		aggregationsBuilder := search.NewAggregationsBuilder(indexReader)
+		for aggName, aggRequest := range req.Aggregations {
+			var aggBuilder search.AggregationBuilder
+			switch aggRequest.Type {
+			case "sum":
+				aggBuilder = aggregation.NewSumAggregation(aggRequest.Field)
+			case "avg":
+				aggBuilder = aggregation.NewAvgAggregation(aggRequest.Field)
+			case "min":
+				aggBuilder = aggregation.NewMinAggregation(aggRequest.Field)
+			case "max":
+				aggBuilder = aggregation.NewMaxAggregation(aggRequest.Field)
+			case "count":
+				aggBuilder = aggregation.NewCountAggregation(aggRequest.Field)
+			case "sumsquares":
+				aggBuilder = aggregation.NewSumSquaresAggregation(aggRequest.Field)
+			case "stats":
+				aggBuilder = aggregation.NewStatsAggregation(aggRequest.Field)
+			default:
+				return nil, fmt.Errorf("unknown aggregation type: %s", aggRequest.Type)
+			}
+			aggregationsBuilder.Add(aggName, aggBuilder)
+		}
+		coll.SetAggregationsBuilder(aggregationsBuilder)
+	}
+
 	memNeeded := memNeededForSearch(req, searcher, coll)
 	if cb := ctx.Value(SearchQueryStartCallbackKey); cb != nil {
 		if cbF, ok := cb.(SearchQueryStartCallbackFn); ok {
@@ -947,11 +976,12 @@ func (i *indexImpl) SearchInContext(ctx context.Context, req *SearchRequest) (sr
 			Total:      1,
 			Successful: 1,
 		},
-		Hits:     hits,
-		Total:    coll.Total(),
-		MaxScore: coll.MaxScore(),
-		Took:     searchDuration,
-		Facets:   coll.FacetResults(),
+		Hits:         hits,
+		Total:        coll.Total(),
+		MaxScore:     coll.MaxScore(),
+		Took:         searchDuration,
+		Facets:       coll.FacetResults(),
+		Aggregations: coll.AggregationResults(),
 	}
 
 	// rescore if fusion flag is set

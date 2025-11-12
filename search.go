@@ -264,6 +264,49 @@ func (fr FacetsRequest) Validate() error {
 	return nil
 }
 
+// An AggregationRequest describes an aggregation
+// to be computed over the result set.
+type AggregationRequest struct {
+	Type  string `json:"type"`           // sum, avg, min, max, count, sumsquares, stats
+	Field string `json:"field"`
+}
+
+// NewAggregationRequest creates an aggregation request
+func NewAggregationRequest(aggType, field string) *AggregationRequest {
+	return &AggregationRequest{
+		Type:  aggType,
+		Field: field,
+	}
+}
+
+// Validate validates the aggregation request
+func (ar *AggregationRequest) Validate() error {
+	validTypes := map[string]bool{
+		"sum": true, "avg": true, "min": true, "max": true,
+		"count": true, "sumsquares": true, "stats": true,
+	}
+	if !validTypes[ar.Type] {
+		return fmt.Errorf("invalid aggregation type '%s'", ar.Type)
+	}
+	if ar.Field == "" {
+		return fmt.Errorf("aggregation field cannot be empty")
+	}
+	return nil
+}
+
+// AggregationsRequest groups together all aggregation requests
+type AggregationsRequest map[string]*AggregationRequest
+
+// Validate validates all aggregation requests
+func (ar AggregationsRequest) Validate() error {
+	for _, v := range ar {
+		if err := v.Validate(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // HighlightRequest describes how field matches
 // should be highlighted.
 type HighlightRequest struct {
@@ -511,14 +554,15 @@ func (ss *SearchStatus) Merge(other *SearchStatus) {
 // Took - The time taken to execute the search.
 // Facets - The facet results for the search.
 type SearchResult struct {
-	Status   *SearchStatus                  `json:"status"`
-	Request  *SearchRequest                 `json:"request,omitempty"`
-	Hits     search.DocumentMatchCollection `json:"hits"`
-	Total    uint64                         `json:"total_hits"`
-	Cost     uint64                         `json:"cost"`
-	MaxScore float64                        `json:"max_score"`
-	Took     time.Duration                  `json:"took"`
-	Facets   search.FacetResults            `json:"facets"`
+	Status       *SearchStatus                  `json:"status"`
+	Request      *SearchRequest                 `json:"request,omitempty"`
+	Hits         search.DocumentMatchCollection `json:"hits"`
+	Total        uint64                         `json:"total_hits"`
+	Cost         uint64                         `json:"cost"`
+	MaxScore     float64                        `json:"max_score"`
+	Took         time.Duration                  `json:"took"`
+	Facets       search.FacetResults            `json:"facets"`
+	Aggregations map[string]*search.AggregationResult `json:"aggregations,omitempty"`
 	// special fields that are applicable only for search
 	// results that are obtained from a presearch
 	SynonymResult search.FieldTermSynonymMap `json:"synonym_result,omitempty"`
