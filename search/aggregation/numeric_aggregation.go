@@ -81,7 +81,11 @@ func (sa *SumAggregation) StartDoc() {
 	sa.sawValue = false
 }
 
-func (sa *SumAggregation) UpdateVisitor(term []byte) {
+func (sa *SumAggregation) UpdateVisitor(field string, term []byte) {
+	// Only process values for our field
+	if field != sa.field {
+		return
+	}
 	sa.sawValue = true
 	// only consider values with shift 0 (full precision)
 	prefixCoded := numeric.PrefixCoded(term)
@@ -139,7 +143,10 @@ func (aa *AvgAggregation) StartDoc() {
 	aa.sawValue = false
 }
 
-func (aa *AvgAggregation) UpdateVisitor(term []byte) {
+func (aa *AvgAggregation) UpdateVisitor(field string, term []byte) {
+	if field != aa.field {
+		return
+	}
 	aa.sawValue = true
 	prefixCoded := numeric.PrefixCoded(term)
 	shift, err := prefixCoded.Shift()
@@ -200,7 +207,10 @@ func (ma *MinAggregation) StartDoc() {
 	ma.sawValue = false
 }
 
-func (ma *MinAggregation) UpdateVisitor(term []byte) {
+func (ma *MinAggregation) UpdateVisitor(field string, term []byte) {
+	if field != ma.field {
+		return
+	}
 	ma.sawValue = true
 	prefixCoded := numeric.PrefixCoded(term)
 	shift, err := prefixCoded.Shift()
@@ -262,7 +272,10 @@ func (ma *MaxAggregation) StartDoc() {
 	ma.sawValue = false
 }
 
-func (ma *MaxAggregation) UpdateVisitor(term []byte) {
+func (ma *MaxAggregation) UpdateVisitor(field string, term []byte) {
+	if field != ma.field {
+		return
+	}
 	ma.sawValue = true
 	prefixCoded := numeric.PrefixCoded(term)
 	shift, err := prefixCoded.Shift()
@@ -323,7 +336,10 @@ func (ca *CountAggregation) StartDoc() {
 	ca.sawValue = false
 }
 
-func (ca *CountAggregation) UpdateVisitor(term []byte) {
+func (ca *CountAggregation) UpdateVisitor(field string, term []byte) {
+	if field != ca.field {
+		return
+	}
 	ca.sawValue = true
 	prefixCoded := numeric.PrefixCoded(term)
 	shift, err := prefixCoded.Shift()
@@ -375,7 +391,10 @@ func (ssa *SumSquaresAggregation) StartDoc() {
 	ssa.sawValue = false
 }
 
-func (ssa *SumSquaresAggregation) UpdateVisitor(term []byte) {
+func (ssa *SumSquaresAggregation) UpdateVisitor(field string, term []byte) {
+	if field != ssa.field {
+		return
+	}
 	ssa.sawValue = true
 	prefixCoded := numeric.PrefixCoded(term)
 	shift, err := prefixCoded.Shift()
@@ -449,7 +468,10 @@ func (sta *StatsAggregation) StartDoc() {
 	sta.sawValue = false
 }
 
-func (sta *StatsAggregation) UpdateVisitor(term []byte) {
+func (sta *StatsAggregation) UpdateVisitor(field string, term []byte) {
+	if field != sta.field {
+		return
+	}
 	sta.sawValue = true
 	prefixCoded := numeric.PrefixCoded(term)
 	shift, err := prefixCoded.Shift()

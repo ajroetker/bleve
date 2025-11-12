@@ -34,7 +34,7 @@ func init() {
 // AggregationBuilder is the interface all aggregation builders must implement
 type AggregationBuilder interface {
 	StartDoc()
-	UpdateVisitor(term []byte)
+	UpdateVisitor(field string, term []byte)
 	EndDoc()
 
 	Result() *AggregationResult
@@ -82,9 +82,29 @@ func (ab *AggregationsBuilder) Add(name string, aggregationBuilder AggregationBu
 
 	ab.aggregationNames = append(ab.aggregationNames, name)
 	ab.aggregations = append(ab.aggregations, aggregationBuilder)
+
+	// Register for the aggregation's own field
 	ab.aggregationsByField[aggregationBuilder.Field()] = append(
 		ab.aggregationsByField[aggregationBuilder.Field()], aggregationBuilder)
 	ab.fields = append(ab.fields, aggregationBuilder.Field())
+
+	// For bucket aggregations, also register for sub-aggregation fields
+	if bucketed, ok := aggregationBuilder.(BucketAggregation); ok {
+		subFields := bucketed.SubAggregationFields()
+		for _, subField := range subFields {
+			if subField != aggregationBuilder.Field() {
+				ab.aggregationsByField[subField] = append(
+					ab.aggregationsByField[subField], aggregationBuilder)
+				ab.fields = append(ab.fields, subField)
+			}
+		}
+	}
+}
+
+// BucketAggregation interface for aggregations that have sub-aggregations
+type BucketAggregation interface {
+	AggregationBuilder
+	SubAggregationFields() []string
 }
 
 // RequiredFields returns the fields needed for aggregations
@@ -103,7 +123,7 @@ func (ab *AggregationsBuilder) StartDoc() {
 func (ab *AggregationsBuilder) UpdateVisitor(field string, term []byte) {
 	if aggregationBuilders, ok := ab.aggregationsByField[field]; ok {
 		for _, aggregationBuilder := range aggregationBuilders {
-			aggregationBuilder.UpdateVisitor(term)
+			aggregationBuilder.UpdateVisitor(field, term)
 		}
 	}
 }

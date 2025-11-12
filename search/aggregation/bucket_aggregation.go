@@ -81,34 +81,52 @@ func (ta *TermsAggregation) Type() string {
 	return "terms"
 }
 
+func (ta *TermsAggregation) SubAggregationFields() []string {
+	if ta.subAggBuilders == nil {
+		return nil
+	}
+	fields := make([]string, 0, len(ta.subAggBuilders))
+	for _, subAgg := range ta.subAggBuilders {
+		fields = append(fields, subAgg.Field())
+		// If sub-agg is also a bucket, recursively collect its fields
+		if bucketed, ok := subAgg.(search.BucketAggregation); ok {
+			fields = append(fields, bucketed.SubAggregationFields()...)
+		}
+	}
+	return fields
+}
+
 func (ta *TermsAggregation) StartDoc() {
 	ta.sawValue = false
 	ta.currentTerm = ""
 }
 
-func (ta *TermsAggregation) UpdateVisitor(term []byte) {
-	ta.sawValue = true
-	termStr := string(term)
-	ta.currentTerm = termStr
+func (ta *TermsAggregation) UpdateVisitor(field string, term []byte) {
+	// If this is our field, track the bucket
+	if field == ta.field {
+		ta.sawValue = true
+		termStr := string(term)
+		ta.currentTerm = termStr
 
-	// Increment count for this term
-	ta.termCounts[termStr]++
+		// Increment count for this term
+		ta.termCounts[termStr]++
 
-	// Initialize sub-aggregations for this term if needed
-	if ta.subAggBuilders != nil && len(ta.subAggBuilders) > 0 {
-		if _, exists := ta.termSubAggs[termStr]; !exists {
-			// Clone sub-aggregation builders for this bucket
-			ta.termSubAggs[termStr] = &subAggregationSet{
-				builders: ta.cloneSubAggBuilders(),
+		// Initialize sub-aggregations for this term if needed
+		if ta.subAggBuilders != nil && len(ta.subAggBuilders) > 0 {
+			if _, exists := ta.termSubAggs[termStr]; !exists {
+				// Clone sub-aggregation builders for this bucket
+				ta.termSubAggs[termStr] = &subAggregationSet{
+					builders: ta.cloneSubAggBuilders(),
+				}
 			}
 		}
+	}
 
-		// Forward to sub-aggregations for this term
-		subAggs := ta.termSubAggs[termStr]
-		for _, subAgg := range subAggs.builders {
-			if subAgg.Field() == ta.field {
-				// Sub-aggregation on same field
-				subAgg.UpdateVisitor(term)
+	// Forward all field values to sub-aggregations in the current bucket
+	if ta.currentTerm != "" && ta.subAggBuilders != nil {
+		if subAggs, exists := ta.termSubAggs[ta.currentTerm]; exists {
+			for _, subAgg := range subAggs.builders {
+				subAgg.UpdateVisitor(field, term)
 			}
 		}
 	}
@@ -239,42 +257,65 @@ func (ra *RangeAggregation) Type() string {
 	return "range"
 }
 
+func (ra *RangeAggregation) SubAggregationFields() []string {
+	if ra.subAggBuilders == nil {
+		return nil
+	}
+	fields := make([]string, 0, len(ra.subAggBuilders))
+	for _, subAgg := range ra.subAggBuilders {
+		fields = append(fields, subAgg.Field())
+		// If sub-agg is also a bucket, recursively collect its fields
+		if bucketed, ok := subAgg.(search.BucketAggregation); ok {
+			fields = append(fields, bucketed.SubAggregationFields()...)
+		}
+	}
+	return fields
+}
+
 func (ra *RangeAggregation) StartDoc() {
 	ra.sawValue = false
 	ra.currentRanges = ra.currentRanges[:0]
 }
 
-func (ra *RangeAggregation) UpdateVisitor(term []byte) {
-	ra.sawValue = true
+func (ra *RangeAggregation) UpdateVisitor(field string, term []byte) {
+	// If this is our field, determine which ranges this document falls into
+	if field == ra.field {
+		ra.sawValue = true
 
-	// Decode numeric value
-	prefixCoded := numeric.PrefixCoded(term)
-	shift, err := prefixCoded.Shift()
-	if err == nil && shift == 0 {
-		i64, err := prefixCoded.Int64()
-		if err == nil {
-			f64 := numeric.Int64ToFloat64(i64)
+		// Decode numeric value
+		prefixCoded := numeric.PrefixCoded(term)
+		shift, err := prefixCoded.Shift()
+		if err == nil && shift == 0 {
+			i64, err := prefixCoded.Int64()
+			if err == nil {
+				f64 := numeric.Int64ToFloat64(i64)
 
-			// Check which ranges this value falls into
-			for rangeName, r := range ra.ranges {
-				if (r.Min == nil || f64 >= *r.Min) && (r.Max == nil || f64 < *r.Max) {
-					ra.rangeCounts[rangeName]++
-					ra.currentRanges = append(ra.currentRanges, rangeName)
+				// Check which ranges this value falls into
+				for rangeName, r := range ra.ranges {
+					if (r.Min == nil || f64 >= *r.Min) && (r.Max == nil || f64 < *r.Max) {
+						ra.rangeCounts[rangeName]++
+						ra.currentRanges = append(ra.currentRanges, rangeName)
 
-					// Initialize sub-aggregations for this range if needed
-					if ra.subAggBuilders != nil && len(ra.subAggBuilders) > 0 {
-						if _, exists := ra.rangeSubAggs[rangeName]; !exists {
-							ra.rangeSubAggs[rangeName] = &subAggregationSet{
-								builders: ra.cloneSubAggBuilders(),
+						// Initialize sub-aggregations for this range if needed
+						if ra.subAggBuilders != nil && len(ra.subAggBuilders) > 0 {
+							if _, exists := ra.rangeSubAggs[rangeName]; !exists {
+								ra.rangeSubAggs[rangeName] = &subAggregationSet{
+									builders: ra.cloneSubAggBuilders(),
+								}
 							}
 						}
-
-						// Forward to sub-aggregations
-						subAggs := ra.rangeSubAggs[rangeName]
-						for _, subAgg := range subAggs.builders {
-							subAgg.UpdateVisitor(term)
-						}
 					}
+				}
+			}
+		}
+	}
+
+	// Forward all field values to sub-aggregations in the current ranges
+	if ra.subAggBuilders != nil {
+		for _, rangeName := range ra.currentRanges {
+			if subAggs, exists := ra.rangeSubAggs[rangeName]; exists {
+				for _, subAgg := range subAggs.builders {
+					subAgg.UpdateVisitor(field, term)
 				}
 			}
 		}
