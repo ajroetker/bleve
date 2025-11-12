@@ -604,6 +604,67 @@ func (i *indexImpl) preSearch(ctx context.Context, req *SearchRequest, reader in
 	}, nil
 }
 
+// buildAggregation recursively builds an aggregation builder from a request
+func buildAggregation(aggRequest *AggregationRequest) (search.AggregationBuilder, error) {
+	// Build sub-aggregations first (if any)
+	var subAggBuilders map[string]search.AggregationBuilder
+	if aggRequest.Aggregations != nil && len(aggRequest.Aggregations) > 0 {
+		subAggBuilders = make(map[string]search.AggregationBuilder)
+		for subName, subRequest := range aggRequest.Aggregations {
+			subBuilder, err := buildAggregation(subRequest)
+			if err != nil {
+				return nil, err
+			}
+			subAggBuilders[subName] = subBuilder
+		}
+	}
+
+	// Build the aggregation based on type
+	switch aggRequest.Type {
+	// Metric aggregations
+	case "sum":
+		return aggregation.NewSumAggregation(aggRequest.Field), nil
+	case "avg":
+		return aggregation.NewAvgAggregation(aggRequest.Field), nil
+	case "min":
+		return aggregation.NewMinAggregation(aggRequest.Field), nil
+	case "max":
+		return aggregation.NewMaxAggregation(aggRequest.Field), nil
+	case "count":
+		return aggregation.NewCountAggregation(aggRequest.Field), nil
+	case "sumsquares":
+		return aggregation.NewSumSquaresAggregation(aggRequest.Field), nil
+	case "stats":
+		return aggregation.NewStatsAggregation(aggRequest.Field), nil
+
+	// Bucket aggregations
+	case "terms":
+		size := 10 // default
+		if aggRequest.Size != nil {
+			size = *aggRequest.Size
+		}
+		return aggregation.NewTermsAggregation(aggRequest.Field, size, subAggBuilders), nil
+
+	case "range":
+		if len(aggRequest.NumericRanges) == 0 {
+			return nil, fmt.Errorf("range aggregation requires numeric ranges")
+		}
+		// Convert API ranges to internal format
+		ranges := make(map[string]*aggregation.NumericRange)
+		for _, nr := range aggRequest.NumericRanges {
+			ranges[nr.Name] = &aggregation.NumericRange{
+				Name: nr.Name,
+				Min:  nr.Min,
+				Max:  nr.Max,
+			}
+		}
+		return aggregation.NewRangeAggregation(aggRequest.Field, ranges, subAggBuilders), nil
+
+	default:
+		return nil, fmt.Errorf("unknown aggregation type: %s", aggRequest.Type)
+	}
+}
+
 // SearchInContext executes a search request operation within the provided
 // Context. Returns a SearchResult object or an error.
 func (i *indexImpl) SearchInContext(ctx context.Context, req *SearchRequest) (sr *SearchResult, err error) {
@@ -860,24 +921,9 @@ func (i *indexImpl) SearchInContext(ctx context.Context, req *SearchRequest) (sr
 	if req.Aggregations != nil {
 		aggregationsBuilder := search.NewAggregationsBuilder(indexReader)
 		for aggName, aggRequest := range req.Aggregations {
-			var aggBuilder search.AggregationBuilder
-			switch aggRequest.Type {
-			case "sum":
-				aggBuilder = aggregation.NewSumAggregation(aggRequest.Field)
-			case "avg":
-				aggBuilder = aggregation.NewAvgAggregation(aggRequest.Field)
-			case "min":
-				aggBuilder = aggregation.NewMinAggregation(aggRequest.Field)
-			case "max":
-				aggBuilder = aggregation.NewMaxAggregation(aggRequest.Field)
-			case "count":
-				aggBuilder = aggregation.NewCountAggregation(aggRequest.Field)
-			case "sumsquares":
-				aggBuilder = aggregation.NewSumSquaresAggregation(aggRequest.Field)
-			case "stats":
-				aggBuilder = aggregation.NewStatsAggregation(aggRequest.Field)
-			default:
-				return nil, fmt.Errorf("unknown aggregation type: %s", aggRequest.Type)
+			aggBuilder, err := buildAggregation(aggRequest)
+			if err != nil {
+				return nil, err
 			}
 			aggregationsBuilder.Add(aggName, aggBuilder)
 		}

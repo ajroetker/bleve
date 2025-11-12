@@ -125,10 +125,22 @@ func (ab *AggregationsBuilder) Results() map[string]*AggregationResult {
 }
 
 // AggregationResult represents the result of an aggregation
+// For metric aggregations, Value contains a single number (float64 or int64)
+// For bucket aggregations, Value contains a slice of *Bucket
 type AggregationResult struct {
 	Field string      `json:"field"`
 	Type  string      `json:"type"`
 	Value interface{} `json:"value"`
+
+	// For bucket aggregations only
+	Buckets []*Bucket `json:"buckets,omitempty"`
+}
+
+// Bucket represents a single bucket in a bucket aggregation
+type Bucket struct {
+	Key          interface{}                  `json:"key"`           // Term or range name
+	Count        int64                        `json:"doc_count"`     // Number of documents in this bucket
+	Aggregations map[string]*AggregationResult `json:"aggregations,omitempty"` // Sub-aggregations
 }
 
 func (ar *AggregationResult) Size() int {
@@ -137,5 +149,17 @@ func (ar *AggregationResult) Size() int {
 	sizeInBytes += len(ar.Type)
 	// Value size depends on type, using approximate size
 	sizeInBytes += size.SizeOfFloat64
+
+	// Add bucket sizes
+	for _, bucket := range ar.Buckets {
+		sizeInBytes += size.SizeOfPtr + size.SizeOfInt64
+		// Approximate size for key
+		sizeInBytes += size.SizeOfString + 20
+		// Approximate size for sub-aggregations
+		for _, subAgg := range bucket.Aggregations {
+			sizeInBytes += subAgg.Size()
+		}
+	}
+
 	return sizeInBytes
 }

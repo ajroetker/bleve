@@ -266,12 +266,23 @@ func (fr FacetsRequest) Validate() error {
 
 // An AggregationRequest describes an aggregation
 // to be computed over the result set.
+// Supports both metric aggregations (sum, avg, etc.) and bucket aggregations (terms, range, etc.).
+// Bucket aggregations can contain sub-aggregations via the Aggregations field.
 type AggregationRequest struct {
-	Type  string `json:"type"`           // sum, avg, min, max, count, sumsquares, stats
+	Type  string `json:"type"`  // Metric: sum, avg, min, max, count, sumsquares, stats
+	                             // Bucket: terms, range, date_range
 	Field string `json:"field"`
+
+	// Bucket aggregation configuration
+	Size           *int             `json:"size,omitempty"`            // For terms aggregations
+	NumericRanges  []*numericRange  `json:"numeric_ranges,omitempty"`  // For numeric range aggregations
+	DateTimeRanges []*dateTimeRange `json:"date_ranges,omitempty"`     // For date range aggregations
+
+	// Sub-aggregations (for bucket aggregations)
+	Aggregations AggregationsRequest `json:"aggregations,omitempty"`
 }
 
-// NewAggregationRequest creates an aggregation request
+// NewAggregationRequest creates a simple metric aggregation request
 func NewAggregationRequest(aggType, field string) *AggregationRequest {
 	return &AggregationRequest{
 		Type:  aggType,
@@ -279,11 +290,40 @@ func NewAggregationRequest(aggType, field string) *AggregationRequest {
 	}
 }
 
+// NewTermsAggregation creates a terms bucket aggregation
+func NewTermsAggregation(field string, size int) *AggregationRequest {
+	return &AggregationRequest{
+		Type:  "terms",
+		Field: field,
+		Size:  &size,
+	}
+}
+
+// NewRangeAggregation creates a numeric range bucket aggregation
+func NewRangeAggregation(field string, ranges []*numericRange) *AggregationRequest {
+	return &AggregationRequest{
+		Type:          "range",
+		Field:         field,
+		NumericRanges: ranges,
+	}
+}
+
+// AddSubAggregation adds a sub-aggregation to a bucket aggregation
+func (ar *AggregationRequest) AddSubAggregation(name string, subAgg *AggregationRequest) {
+	if ar.Aggregations == nil {
+		ar.Aggregations = make(AggregationsRequest)
+	}
+	ar.Aggregations[name] = subAgg
+}
+
 // Validate validates the aggregation request
 func (ar *AggregationRequest) Validate() error {
 	validTypes := map[string]bool{
+		// Metric aggregations
 		"sum": true, "avg": true, "min": true, "max": true,
 		"count": true, "sumsquares": true, "stats": true,
+		// Bucket aggregations
+		"terms": true, "range": true, "date_range": true,
 	}
 	if !validTypes[ar.Type] {
 		return fmt.Errorf("invalid aggregation type '%s'", ar.Type)
@@ -291,6 +331,25 @@ func (ar *AggregationRequest) Validate() error {
 	if ar.Field == "" {
 		return fmt.Errorf("aggregation field cannot be empty")
 	}
+
+	// Validate bucket-specific configuration
+	if ar.Type == "terms" {
+		if ar.Size != nil && *ar.Size < 0 {
+			return fmt.Errorf("terms aggregation size must be non-negative")
+		}
+	}
+
+	if ar.Type == "range" {
+		if len(ar.NumericRanges) == 0 {
+			return fmt.Errorf("range aggregation must have at least one range")
+		}
+	}
+
+	// Validate sub-aggregations
+	if ar.Aggregations != nil {
+		return ar.Aggregations.Validate()
+	}
+
 	return nil
 }
 
