@@ -165,7 +165,8 @@ type AggregationResult struct {
 	Value interface{} `json:"value"`
 
 	// For bucket aggregations only
-	Buckets []*Bucket `json:"buckets,omitempty"`
+	Buckets  []*Bucket              `json:"buckets,omitempty"`
+	Metadata map[string]interface{} `json:"metadata,omitempty"` // Additional metadata (e.g., center coords for geo_distance)
 }
 
 // AvgResult contains average with the necessary metadata for proper merging
@@ -198,9 +199,10 @@ type CardinalityResult struct {
 
 // Bucket represents a single bucket in a bucket aggregation
 type Bucket struct {
-	Key          interface{}                  `json:"key"`           // Term or range name
-	Count        int64                        `json:"doc_count"`     // Number of documents in this bucket
-	Aggregations map[string]*AggregationResult `json:"aggregations,omitempty"` // Sub-aggregations
+	Key          interface{}                   `json:"key"`                     // Term or range name
+	Count        int64                         `json:"doc_count"`               // Number of documents in this bucket
+	Aggregations map[string]*AggregationResult `json:"aggregations,omitempty"`  // Sub-aggregations
+	Metadata     map[string]interface{}        `json:"metadata,omitempty"`      // Additional metadata (e.g., lat/lon for geohash)
 }
 
 func (ar *AggregationResult) Size() int {

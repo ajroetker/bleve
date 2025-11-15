@@ -31,6 +31,7 @@ import (
 	"github.com/blevesearch/bleve/v2/analysis/datetime/timestamp/nanoseconds"
 	"github.com/blevesearch/bleve/v2/analysis/datetime/timestamp/seconds"
 	"github.com/blevesearch/bleve/v2/document"
+	"github.com/blevesearch/bleve/v2/geo"
 	"github.com/blevesearch/bleve/v2/index/scorch"
 	"github.com/blevesearch/bleve/v2/index/upsidedown"
 	"github.com/blevesearch/bleve/v2/mapping"
@@ -691,6 +692,87 @@ func buildAggregation(aggRequest *AggregationRequest) (search.AggregationBuilder
 			}
 		}
 		return aggregation.NewRangeAggregation(aggRequest.Field, ranges, subAggBuilders), nil
+
+	case "histogram":
+		interval := 1.0 // default interval
+		if aggRequest.Interval != nil {
+			interval = *aggRequest.Interval
+		}
+		minDocCount := int64(0) // default
+		if aggRequest.MinDocCount != nil {
+			minDocCount = *aggRequest.MinDocCount
+		}
+		return aggregation.NewHistogramAggregation(aggRequest.Field, interval, minDocCount, subAggBuilders), nil
+
+	case "date_histogram":
+		minDocCount := int64(0) // default
+		if aggRequest.MinDocCount != nil {
+			minDocCount = *aggRequest.MinDocCount
+		}
+
+		// Use fixed interval if provided, otherwise calendar interval
+		if aggRequest.FixedInterval != "" {
+			duration, err := time.ParseDuration(aggRequest.FixedInterval)
+			if err != nil {
+				return nil, fmt.Errorf("invalid fixed interval '%s': %v", aggRequest.FixedInterval, err)
+			}
+			return aggregation.NewDateHistogramAggregationWithFixedInterval(aggRequest.Field, duration, minDocCount, subAggBuilders), nil
+		}
+
+		// Default to daily calendar interval if not specified
+		calendarInterval := aggregation.CalendarIntervalDay
+		if aggRequest.CalendarInterval != "" {
+			calendarInterval = aggregation.CalendarInterval(aggRequest.CalendarInterval)
+		}
+		return aggregation.NewDateHistogramAggregation(aggRequest.Field, calendarInterval, minDocCount, subAggBuilders), nil
+
+	case "geohash_grid":
+		precision := 5 // default precision (5km x 5km cells)
+		if aggRequest.GeoHashPrecision != nil {
+			precision = *aggRequest.GeoHashPrecision
+		}
+		size := 10 // default
+		if aggRequest.Size != nil {
+			size = *aggRequest.Size
+		}
+		return aggregation.NewGeohashGridAggregation(aggRequest.Field, precision, size, subAggBuilders), nil
+
+	case "geo_distance":
+		if aggRequest.CenterLon == nil || aggRequest.CenterLat == nil {
+			return nil, fmt.Errorf("geo_distance aggregation requires center_lon and center_lat")
+		}
+		if len(aggRequest.DistanceRanges) == 0 {
+			return nil, fmt.Errorf("geo_distance aggregation requires distance ranges")
+		}
+
+		// Parse distance unit (default to kilometers)
+		unitMultiplier := 1000.0 // default to kilometers
+		if aggRequest.DistanceUnit != "" {
+			multiplier, err := geo.ParseDistanceUnit(aggRequest.DistanceUnit)
+			if err != nil {
+				return nil, fmt.Errorf("invalid distance unit '%s': %v", aggRequest.DistanceUnit, err)
+			}
+			unitMultiplier = multiplier
+		}
+
+		// Convert API distance ranges to internal format
+		ranges := make(map[string]*aggregation.DistanceRange)
+		for _, dr := range aggRequest.DistanceRanges {
+			ranges[dr.Name] = &aggregation.DistanceRange{
+				Name: dr.Name,
+				From: dr.From,
+				To:   dr.To,
+			}
+		}
+
+		return aggregation.NewGeoDistanceAggregation(
+			aggRequest.Field,
+			*aggRequest.CenterLon,
+			*aggRequest.CenterLat,
+			unitMultiplier,
+			ranges,
+			subAggBuilders,
+		), nil
 
 	default:
 		return nil, fmt.Errorf("unknown aggregation type: %s", aggRequest.Type)

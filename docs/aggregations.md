@@ -37,7 +37,11 @@ AggregationBuilder (interface)
 │   └── CardinalityAggregation (HyperLogLog++)
 └── Bucket Aggregations
     ├── TermsAggregation
-    └── RangeAggregation
+    ├── RangeAggregation
+    ├── HistogramAggregation
+    ├── DateHistogramAggregation
+    ├── GeohashGridAggregation
+    └── GeoDistanceAggregation
 ```
 
 Each bucket aggregation can contain sub-aggregations, enabling hierarchical analytics.
@@ -168,6 +172,149 @@ ranges := []*bleve.numericRange{
 }
 
 agg := bleve.NewRangeAggregation("price", ranges)
+```
+
+#### histogram
+Groups numeric values into fixed-interval buckets. Automatically creates buckets at regular intervals.
+
+```go
+interval := 50.0 // Create buckets every $50
+minDocCount := int64(1) // Only show buckets with at least 1 document
+
+aggReq := &bleve.AggregationRequest{
+    Type:        "histogram",
+    Field:       "price",
+    Interval:    &interval,
+    MinDocCount: &minDocCount,
+}
+```
+
+**Parameters**:
+- `Interval`: Bucket width (e.g., 50 creates buckets at 0-50, 50-100, 100-150...)
+- `MinDocCount` (optional): Minimum documents required to include a bucket (default: 0)
+
+**Example Result**:
+```go
+// Buckets: [0-50: 12 docs], [50-100: 45 docs], [100-150: 23 docs]
+// Each bucket Key is the lower bound: 0.0, 50.0, 100.0
+```
+
+#### date_histogram
+Groups datetime values into time interval buckets. Supports both calendar-aware intervals (day, month, year) and fixed durations.
+
+**Calendar Intervals** (month-aware, DST-aware):
+```go
+aggReq := &bleve.AggregationRequest{
+    Type:             "date_histogram",
+    Field:            "timestamp",
+    CalendarInterval: "1d", // 1m, 1h, 1d, 1w, 1M, 1q, 1y
+}
+```
+
+**Fixed Intervals** (exact durations):
+```go
+aggReq := &bleve.AggregationRequest{
+    Type:          "date_histogram",
+    Field:         "timestamp",
+    FixedInterval: "30m", // Any Go duration string
+}
+```
+
+**Parameters**:
+- `CalendarInterval`: Calendar-aware interval ("1m", "1h", "1d", "1w", "1M", "1q", "1y")
+- `FixedInterval`: Fixed duration (e.g., "30m", "1h", "24h")
+- `MinDocCount` (optional): Minimum documents required to include a bucket (default: 0)
+
+**Example Result**:
+```go
+// Buckets have ISO 8601 timestamp keys
+// Key: "2024-01-01T00:00:00Z", Count: 145
+// Key: "2024-01-02T00:00:00Z", Count: 203
+// Each bucket includes metadata with numeric timestamp
+```
+
+#### geohash_grid
+Groups geo points by geohash grid cells. Useful for map visualizations and geographic analysis.
+
+```go
+precision := 5 // 5km x 5km cells
+size := 10 // Return top 10 cells
+
+aggReq := &bleve.AggregationRequest{
+    Type:             "geohash_grid",
+    Field:            "location",
+    GeoHashPrecision: &precision,
+    Size:             &size,
+}
+```
+
+**Parameters**:
+- `GeoHashPrecision`: Grid precision (1-12, default: 5)
+  - **1**: ~5,000km x 5,000km
+  - **3**: ~156km x 156km
+  - **5**: ~4.9km x 4.9km (default)
+  - **7**: ~153m x 153m
+  - **9**: ~4.8m x 4.8m
+  - **12**: ~3.7cm x 1.8cm
+- `Size`: Maximum number of grid cells to return (default: 10)
+
+**Example Result**:
+```go
+// Each bucket Key is a geohash string
+// Metadata includes center point lat/lon
+type Bucket struct {
+    Key:   "9q8yy", // geohash
+    Count: 1523,    // documents in this cell
+    Metadata: {
+        "lat": 37.7749,
+        "lon": -122.4194,
+    }
+}
+```
+
+#### geo_distance
+Groups geo points by distance ranges from a center point. Useful for "within X km" queries.
+
+```go
+from0 := 0.0
+to10 := 10.0
+from10 := 10.0
+
+centerLon := -122.4194
+centerLat := 37.7749
+
+aggReq := &bleve.AggregationRequest{
+    Type:         "geo_distance",
+    Field:        "location",
+    CenterLon:    &centerLon,
+    CenterLat:    &centerLat,
+    DistanceUnit: "km", // m, km, mi, ft, yd, etc.
+    DistanceRanges: []*bleve.distanceRange{
+        {Name: "0-10km", From: &from0, To: &to10},
+        {Name: "10km+", From: &from10, To: nil}, // nil = unbounded
+    },
+}
+```
+
+**Parameters**:
+- `CenterLon`, `CenterLat`: Center point coordinates (required)
+- `DistanceUnit`: Unit for distance ranges ("m", "km", "mi", "ft", "yd", etc.)
+- `DistanceRanges`: Array of distance ranges with From/To values in specified unit
+
+**Example Result**:
+```go
+// Buckets sorted by distance (ascending)
+// Metadata includes range boundaries and center coordinates
+type AggregationResult struct {
+    Buckets: [
+        {Key: "0-10km", Count: 245},
+        {Key: "10km+", Count: 89},
+    ],
+    Metadata: {
+        "center_lat": 37.7749,
+        "center_lon": -122.4194,
+    }
+}
 ```
 
 ## Sub-Aggregations
