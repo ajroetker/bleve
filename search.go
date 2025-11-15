@@ -281,6 +281,9 @@ type AggregationRequest struct {
 	NumericRanges  []*numericRange  `json:"numeric_ranges,omitempty"`  // For numeric range aggregations
 	DateTimeRanges []*dateTimeRange `json:"date_ranges,omitempty"`     // For date range aggregations
 
+	// Metric aggregation configuration
+	Precision *uint8 `json:"precision,omitempty"` // For cardinality aggregations (HyperLogLog precision: 10-18, default: 14)
+
 	// Sub-aggregations (for bucket aggregations)
 	Aggregations AggregationsRequest `json:"aggregations,omitempty"`
 

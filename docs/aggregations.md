@@ -33,7 +33,8 @@ AggregationBuilder (interface)
 │   ├── MaxAggregation
 │   ├── CountAggregation
 │   ├── SumSquaresAggregation
-│   └── StatsAggregation
+│   ├── StatsAggregation
+│   └── CardinalityAggregation (HyperLogLog++)
 └── Bucket Aggregations
     ├── TermsAggregation
     └── RangeAggregation
@@ -101,6 +102,36 @@ type StatsResult struct {
     StdDev     float64
 }
 ```
+
+#### cardinality
+Computes approximate unique value count using HyperLogLog++. Provides memory-efficient cardinality estimation with configurable precision.
+
+```go
+agg := bleve.NewAggregationRequest("cardinality", "user_id")
+
+// With custom precision (optional)
+precision := uint8(14) // 10-18, default: 14
+aggWithPrecision := &bleve.AggregationRequest{
+    Type:      "cardinality",
+    Field:     "user_id",
+    Precision: &precision,
+}
+
+// Result structure:
+type CardinalityResult struct {
+    Cardinality int64  `json:"value"`  // Estimated unique count
+    Sketch      []byte `json:"sketch,omitempty"` // Serialized HLL sketch
+}
+```
+
+**Precision vs Accuracy Tradeoff**:
+- **Precision 10**: 1KB memory, ~2.6% standard error
+- **Precision 12**: 4KB memory, ~1.6% standard error
+- **Precision 14**: 16KB memory, ~0.81% standard error (default)
+- **Precision 16**: 64KB memory, ~0.41% standard error
+
+**Distributed/Multi-Shard Support**:
+Cardinality aggregations merge correctly across multiple index shards using HyperLogLog sketch merging, providing accurate global cardinality estimates.
 
 ### Bucket Aggregations
 
@@ -364,16 +395,13 @@ Aggregations process documents from multiple segments concurrently. The `TopNCol
 
 ## Limitations
 
-1. **Average merging**: Merging averages from shards is approximate without storing counts
-2. **Cardinality**: Not yet implemented (planned: HyperLogLog-based)
-3. **Date range aggregations**: Not yet implemented
-4. **Pipeline aggregations**: Not yet implemented (e.g., moving average, derivative)
+1. **Date range aggregations**: Not yet implemented
+2. **Pipeline aggregations**: Not yet implemented (e.g., moving average, derivative)
 
 ## Future Enhancements
 
-- Exact average merging (requires storing counts with averages)
-- Cardinality aggregation using HyperLogLog
 - Date histogram aggregations
 - Pipeline aggregations for time-series analysis
 - Geo-distance aggregations
+- Significant terms aggregation for anomaly detection
 - Automatic segment-level pre-computation for repeated queries

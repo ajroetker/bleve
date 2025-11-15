@@ -637,6 +637,12 @@ func buildAggregation(aggRequest *AggregationRequest) (search.AggregationBuilder
 		return aggregation.NewSumSquaresAggregation(aggRequest.Field), nil
 	case "stats":
 		return aggregation.NewStatsAggregation(aggRequest.Field), nil
+	case "cardinality":
+		precision := uint8(14) // default precision
+		if aggRequest.Precision != nil {
+			precision = *aggRequest.Precision
+		}
+		return aggregation.NewCardinalityAggregation(aggRequest.Field, precision), nil
 
 	// Bucket aggregations
 	case "terms":
