@@ -38,6 +38,7 @@ AggregationBuilder (interface)
 └── Bucket Aggregations
     ├── TermsAggregation
     ├── RangeAggregation
+    ├── SignificantTermsAggregation
     ├── HistogramAggregation
     ├── DateHistogramAggregation
     ├── GeohashGridAggregation
@@ -173,6 +174,94 @@ ranges := []*bleve.numericRange{
 
 agg := bleve.NewRangeAggregation("price", ranges)
 ```
+
+#### significant_terms
+Identifies terms that are uncommonly common in the search results compared to the entire index. Unlike `terms` aggregation which returns the most frequent terms, `significant_terms` finds terms that appear much more often in your query results than expected based on their frequency in the background data.
+
+**Use Cases**:
+- Anomaly detection: Find unusual patterns in subsets of data
+- Content recommendation: Discover distinguishing characteristics
+- Root cause analysis: Identify key differentiators in filtered data
+
+**How It Works**:
+1. **Two-Phase Architecture**: Uses bleve's pre-search infrastructure to collect background statistics across all index shards
+2. **Foreground Collection**: During query execution, collects term frequencies from matching documents
+3. **Statistical Scoring**: Compares foreground vs. background frequencies using configurable algorithms
+4. **Ranking**: Returns top N terms ranked by significance score
+
+**Statistical Algorithms**:
+- **JLH** (default): Measures how "uncommonly common" a term is (high in results, low in background)
+- **Mutual Information**: Information gain from knowing whether a document contains the term
+- **Chi-Squared**: Statistical test for deviation from expected frequency
+- **Percentage**: Simple ratio comparison of foreground to background rates
+
+**Example**:
+```go
+size := 10
+minDocCount := int64(5)
+algorithm := "jlh" // or "mutual_information", "chi_squared", "percentage"
+
+aggReq := &bleve.AggregationRequest{
+    Type:                 "significant_terms",
+    Field:                "tags",
+    Size:                 &size,
+    MinDocCount:          &minDocCount,
+    SignificanceAlgorithm: algorithm,
+}
+```
+
+**Parameters**:
+- `Field`: Text field to analyze for significant terms
+- `Size`: Maximum number of significant terms to return (default: 10)
+- `MinDocCount`: Minimum foreground documents required (default: 1)
+- `SignificanceAlgorithm`: Scoring algorithm (default: "jlh")
+
+**Result Structure**:
+```go
+type Bucket struct {
+    Key      string                    // The significant term
+    Count    int64                     // Foreground document count
+    Metadata map[string]interface{} {  // Additional statistics
+        "score":    float64,           // Significance score
+        "bg_count": int64,              // Background document count
+    }
+}
+
+// Result metadata includes:
+// - "algorithm": Algorithm used for scoring
+// - "fg_doc_count": Total foreground documents
+// - "bg_doc_count": Total background documents
+// - "unique_terms": Number of unique terms seen
+// - "significant_terms": Number of terms returned
+```
+
+**Example Scenario**:
+```go
+// Searching for documents about "databases"
+// Background corpus: 1000 documents
+//   - "programming": 300 docs (30% - very common, generic)
+//   - "database": 100 docs (10% - common)
+//   - "nosql": 50 docs (5% - moderately common)
+//   - "scalability": 30 docs (3% - less common)
+//
+// Query results: 100 documents about databases
+//   - "database": 95 docs (95% of results)
+//   - "nosql": 45 docs (45% of results)
+//   - "scalability": 25 docs (25% of results)
+//   - "programming": 20 docs (20% of results)
+//
+// Significant terms (ranked by JLH score):
+// 1. "nosql" - 45% in results vs 5% in background (9x enrichment)
+// 2. "scalability" - 25% vs 3% (8.3x enrichment)
+// 3. "database" - 95% vs 10% (9.5x enrichment, but already known from query)
+// 4. "programming" - 20% vs 30% (0.67x - not significant, less common than expected)
+```
+
+**Performance Notes**:
+- Background statistics are collected during pre-search phase across all index shards
+- For single-index searches without pre-search, falls back to collecting stats from IndexReader
+- Stats collection uses efficient dictionary iteration (no document reads)
+- Memory usage: O(unique_terms_in_field)
 
 #### histogram
 Groups numeric values into fixed-interval buckets. Automatically creates buckets at regular intervals.

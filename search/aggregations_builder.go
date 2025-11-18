@@ -197,6 +197,14 @@ type CardinalityResult struct {
 	HLL interface{} `json:"-"`
 }
 
+// SignificantTermsStats contains background term statistics for significant_terms aggregations
+// Used in pre-search phase to collect term frequencies across all index shards
+type SignificantTermsStats struct {
+	Field        string         `json:"field"`
+	TotalDocs    int64          `json:"total_docs"`
+	TermDocFreqs map[string]int64 `json:"term_doc_freqs"` // term -> background doc frequency
+}
+
 // Bucket represents a single bucket in a bucket aggregation
 type Bucket struct {
 	Key          interface{}                   `json:"key"`                     // Term or range name

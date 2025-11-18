@@ -592,6 +592,15 @@ func (i *indexImpl) preSearch(ctx context.Context, req *SearchRequest, reader in
 		}
 	}
 
+	// Collect background statistics for significant_terms aggregations
+	var significantTermsStats map[string]*search.SignificantTermsStats
+	if requestHasSignificantTerms(req) {
+		significantTermsStats, err = i.collectSignificantTermsBackgroundStats(req, reader)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	return &SearchResult{
 		Status: &SearchStatus{
 			Total:      1,
@@ -603,7 +612,50 @@ func (i *indexImpl) preSearch(ctx context.Context, req *SearchRequest, reader in
 			DocCount:         float64(count),
 			FieldCardinality: fieldCardinality,
 		},
+		SignificantTermsStats: significantTermsStats,
 	}, nil
+}
+
+// collectSignificantTermsBackgroundStats collects background term statistics
+// for all significant_terms aggregations in the request
+func (i *indexImpl) collectSignificantTermsBackgroundStats(req *SearchRequest, reader index.IndexReader) (map[string]*search.SignificantTermsStats, error) {
+	// Find all fields used in significant_terms aggregations
+	fields := make(map[string]bool)
+	collectSignificantTermsFields(req.Aggregations, fields)
+
+	if len(fields) == 0 {
+		return nil, nil
+	}
+
+	// Collect statistics for each field
+	stats := make(map[string]*search.SignificantTermsStats)
+	totalDocs, err := reader.DocCount()
+	if err != nil {
+		return nil, err
+	}
+
+	for field := range fields {
+		fieldStats, err := aggregation.CollectBackgroundTermStats(reader, field, int64(totalDocs))
+		if err != nil {
+			return nil, err
+		}
+		stats[field] = fieldStats
+	}
+
+	return stats, nil
+}
+
+// collectSignificantTermsFields recursively finds all fields used in significant_terms aggregations
+func collectSignificantTermsFields(aggs map[string]*AggregationRequest, fields map[string]bool) {
+	for _, agg := range aggs {
+		if agg.Type == "significant_terms" && agg.Field != "" {
+			fields[agg.Field] = true
+		}
+		// Recurse into sub-aggregations
+		if agg.Aggregations != nil {
+			collectSignificantTermsFields(agg.Aggregations, fields)
+		}
+	}
 }
 
 // buildAggregation recursively builds an aggregation builder from a request
@@ -773,6 +825,24 @@ func buildAggregation(aggRequest *AggregationRequest) (search.AggregationBuilder
 			ranges,
 			subAggBuilders,
 		), nil
+
+	case "significant_terms":
+		size := 10 // default
+		if aggRequest.Size != nil {
+			size = *aggRequest.Size
+		}
+		minDocCount := int64(0) // default
+		if aggRequest.MinDocCount != nil {
+			minDocCount = *aggRequest.MinDocCount
+		}
+
+		// Parse algorithm
+		algorithm := aggregation.SignificanceAlgorithmJLH // default
+		if aggRequest.SignificanceAlgorithm != "" {
+			algorithm = aggregation.SignificanceAlgorithm(aggRequest.SignificanceAlgorithm)
+		}
+
+		return aggregation.NewSignificantTermsAggregation(aggRequest.Field, size, minDocCount, algorithm), nil
 
 	default:
 		return nil, fmt.Errorf("unknown aggregation type: %s", aggRequest.Type)
@@ -1034,11 +1104,36 @@ func (i *indexImpl) SearchInContext(ctx context.Context, req *SearchRequest) (sr
 	// build aggregations if requested
 	if req.Aggregations != nil {
 		aggregationsBuilder := search.NewAggregationsBuilder(indexReader)
+
+		// Get significant_terms background stats from PreSearchData if available
+		var significantTermsStats map[string]*search.SignificantTermsStats
+		if req.PreSearchData != nil {
+			if stats, ok := req.PreSearchData[search.SignificantTermsPreSearchDataKey].(map[string]*search.SignificantTermsStats); ok {
+				significantTermsStats = stats
+			}
+		}
+
 		for aggName, aggRequest := range req.Aggregations {
 			aggBuilder, err := buildAggregation(aggRequest)
 			if err != nil {
 				return nil, err
 			}
+
+			// If this is a significant_terms aggregation, inject the background stats
+			if aggRequest.Type == "significant_terms" {
+				if sta, ok := aggBuilder.(*aggregation.SignificantTermsAggregation); ok {
+					if significantTermsStats != nil && aggRequest.Field != "" {
+						if fieldStats, ok := significantTermsStats[aggRequest.Field]; ok {
+							sta.SetBackgroundStats(fieldStats)
+						}
+					}
+					// If no pre-search stats, the aggregation will use the index reader
+					if significantTermsStats == nil {
+						sta.SetIndexReader(indexReader)
+					}
+				}
+			}
+
 			aggregationsBuilder.Add(aggName, aggBuilder)
 		}
 		coll.SetAggregationsBuilder(aggregationsBuilder)

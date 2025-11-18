@@ -307,6 +307,9 @@ type AggregationRequest struct {
 	DistanceUnit    string            `json:"distance_unit,omitempty"`    // For geo_distance: "m", "km", "mi", etc.
 	DistanceRanges  []*distanceRange  `json:"distance_ranges,omitempty"`  // For geo_distance aggregations
 
+	// Significant terms aggregation configuration
+	SignificanceAlgorithm string `json:"significance_algorithm,omitempty"` // For significant_terms: "jlh", "mutual_information", "chi_squared", "percentage"
+
 	// Sub-aggregations (for bucket aggregations)
 	Aggregations AggregationsRequest `json:"aggregations,omitempty"`
 
@@ -380,7 +383,7 @@ func (ar *AggregationRequest) Validate() error {
 		// Bucket aggregations
 		"terms": true, "range": true, "date_range": true,
 		"histogram": true, "date_histogram": true,
-		"geohash_grid": true, "geo_distance": true,
+		"geohash_grid": true, "geo_distance": true, "significant_terms": true,
 	}
 	if !validTypes[ar.Type] {
 		return fmt.Errorf("invalid aggregation type '%s'", ar.Type)
@@ -700,6 +703,9 @@ type SearchResult struct {
 
 	// The following fields are applicable to BM25 preSearch
 	BM25Stats *search.BM25Stats `json:"bm25_stats,omitempty"`
+
+	// The following field is applicable to significant_terms aggregations pre-search
+	SignificantTermsStats map[string]*search.SignificantTermsStats `json:"significant_terms_stats,omitempty"` // field -> stats
 }
 
 func (sr *SearchResult) Size() int {
