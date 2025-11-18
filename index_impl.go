@@ -595,7 +595,7 @@ func (i *indexImpl) preSearch(ctx context.Context, req *SearchRequest, reader in
 	// Collect background statistics for significant_terms aggregations
 	var significantTermsStats map[string]*search.SignificantTermsStats
 	if requestHasSignificantTerms(req) {
-		significantTermsStats, err = i.collectSignificantTermsBackgroundStats(req, reader)
+		significantTermsStats, err = i.collectSignificantTermsBackgroundStats(ctx, req, reader)
 		if err != nil {
 			return nil, err
 		}
@@ -618,7 +618,7 @@ func (i *indexImpl) preSearch(ctx context.Context, req *SearchRequest, reader in
 
 // collectSignificantTermsBackgroundStats collects background term statistics
 // for all significant_terms aggregations in the request
-func (i *indexImpl) collectSignificantTermsBackgroundStats(req *SearchRequest, reader index.IndexReader) (map[string]*search.SignificantTermsStats, error) {
+func (i *indexImpl) collectSignificantTermsBackgroundStats(ctx context.Context, req *SearchRequest, reader index.IndexReader) (map[string]*search.SignificantTermsStats, error) {
 	// Find all fields used in significant_terms aggregations
 	fields := make(map[string]bool)
 	collectSignificantTermsFields(req.Aggregations, fields)
@@ -629,13 +629,10 @@ func (i *indexImpl) collectSignificantTermsBackgroundStats(req *SearchRequest, r
 
 	// Collect statistics for each field
 	stats := make(map[string]*search.SignificantTermsStats)
-	totalDocs, err := reader.DocCount()
-	if err != nil {
-		return nil, err
-	}
 
 	for field := range fields {
-		fieldStats, err := aggregation.CollectBackgroundTermStats(reader, field, int64(totalDocs))
+		// Pass nil for terms to collect ALL terms from the field dictionary
+		fieldStats, err := aggregation.CollectBackgroundTermStats(ctx, reader, field, nil)
 		if err != nil {
 			return nil, err
 		}

@@ -373,21 +373,38 @@ func calculatePercentage(fgCount, fgTotal, bgCount, bgTotal int64) float64 {
 	return score
 }
 
-// CollectBackgroundTermStats collects background term statistics for significant_terms pre-search
-// This is called during the pre-search phase to gather term frequencies across the index
+// CollectBackgroundTermStats collects background term statistics for significant_terms
+// If terms is nil/empty, collects stats for ALL terms in the field (used during pre-search)
+// If terms is provided, collects stats only for those specific terms
 func CollectBackgroundTermStats(ctx context.Context, indexReader index.IndexReader, field string, terms []string) (*search.SignificantTermsStats, error) {
 	count, err := indexReader.DocCount()
 	if err != nil {
 		return nil, err
 	}
 
-	termDocFreqs := make(map[string]int64, len(terms))
+	termDocFreqs := make(map[string]int64)
 
-	for _, term := range terms {
-		tfr, err := indexReader.TermFieldReader(ctx, []byte(term), field, false, false, false)
-		if err == nil && tfr != nil {
-			termDocFreqs[term] = int64(tfr.Count())
-			tfr.Close()
+	// If no specific terms provided, collect ALL terms from field dictionary (pre-search mode)
+	if len(terms) == 0 {
+		dict, err := indexReader.FieldDict(field)
+		if err != nil {
+			return nil, err
+		}
+		defer dict.Close()
+
+		de, err := dict.Next()
+		for err == nil && de != nil {
+			termDocFreqs[de.Term] = int64(de.Count)
+			de, err = dict.Next()
+		}
+	} else {
+		// Collect stats only for specific terms
+		for _, term := range terms {
+			tfr, err := indexReader.TermFieldReader(ctx, []byte(term), field, false, false, false)
+			if err == nil && tfr != nil {
+				termDocFreqs[term] = int64(tfr.Count())
+				tfr.Close()
+			}
 		}
 	}
 
