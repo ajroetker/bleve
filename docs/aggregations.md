@@ -631,13 +631,16 @@ Aggregations process documents from multiple segments concurrently. The `TopNCol
 
 ## Limitations
 
-1. **Date range aggregations**: Not yet implemented
-2. **Pipeline aggregations**: Not yet implemented (e.g., moving average, derivative)
+1. **Date range aggregations**: Not yet implemented (specific date ranges, different from date_histogram)
+2. **Pipeline aggregations**: Not yet implemented (e.g., moving average, derivative, bucket_sort)
+3. **Composite aggregations**: Not yet implemented (pagination for multi-level aggregations)
+4. **Nested aggregations**: Not yet implemented (requires document model changes)
 
 ## Future Enhancements
 
-- Date histogram aggregations
-- Pipeline aggregations for time-series analysis
-- Geo-distance aggregations
-- Significant terms aggregation for anomaly detection
+- Pipeline aggregations for time-series analysis (moving averages, derivatives, cumulative sums)
+- Composite aggregations for paginating through multi-level aggregations
 - Automatic segment-level pre-computation for repeated queries
+- Parent/child and nested document aggregations
+- IP range aggregations
+- Matrix stats aggregations (correlation, covariance)
