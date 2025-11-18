@@ -742,6 +742,30 @@ func buildAggregation(aggRequest *AggregationRequest) (search.AggregationBuilder
 		}
 		return aggregation.NewRangeAggregation(aggRequest.Field, ranges, subAggBuilders), nil
 
+	case "date_range":
+		if len(aggRequest.DateTimeRanges) == 0 {
+			return nil, fmt.Errorf("date_range aggregation requires date ranges")
+		}
+		// Convert API ranges to internal format
+		ranges := make(map[string]*aggregation.DateRange)
+		for _, dtr := range aggRequest.DateTimeRanges {
+			dr := &aggregation.DateRange{
+				Name: dtr.Name,
+			}
+			// Handle start time (zero time = unbounded)
+			if !dtr.Start.IsZero() {
+				start := dtr.Start
+				dr.Start = &start
+			}
+			// Handle end time (zero time = unbounded)
+			if !dtr.End.IsZero() {
+				end := dtr.End
+				dr.End = &end
+			}
+			ranges[dtr.Name] = dr
+		}
+		return aggregation.NewDateRangeAggregation(aggRequest.Field, ranges, subAggBuilders), nil
+
 	case "histogram":
 		interval := 1.0 // default interval
 		if aggRequest.Interval != nil {

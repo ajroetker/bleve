@@ -277,7 +277,7 @@ func (fr FacetsRequest) Validate() error {
 // Bucket aggregations can contain sub-aggregations via the Aggregations field.
 type AggregationRequest struct {
 	Type  string `json:"type"`  // Metric: sum, avg, min, max, count, sumsquares, stats, cardinality
-	                             // Bucket: terms, range, histogram, date_histogram, geohash_grid, geo_distance
+	                             // Bucket: terms, range, date_range, histogram, date_histogram, geohash_grid, geo_distance, significant_terms
 	Field string `json:"field"`
 
 	// Bucket aggregation configuration

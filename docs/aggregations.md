@@ -38,6 +38,7 @@ AggregationBuilder (interface)
 └── Bucket Aggregations
     ├── TermsAggregation
     ├── RangeAggregation
+    ├── DateRangeAggregation
     ├── SignificantTermsAggregation
     ├── HistogramAggregation
     ├── DateHistogramAggregation
@@ -174,6 +175,56 @@ ranges := []*bleve.numericRange{
 
 agg := bleve.NewRangeAggregation("price", ranges)
 ```
+
+#### date_range
+Groups documents into arbitrary date ranges. Unlike `date_histogram` which creates regular time intervals, `date_range` lets you define custom date ranges (e.g., "Q1 2023", "Summer 2024", "Pre-2020").
+
+```go
+import "time"
+
+// Define custom date ranges
+q12023 := time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)
+q22023 := time.Date(2023, 4, 1, 0, 0, 0, 0, time.UTC)
+q32023 := time.Date(2023, 7, 1, 0, 0, 0, 0, time.UTC)
+
+aggReq := &bleve.AggregationRequest{
+    Type:  "date_range",
+    Field: "timestamp",
+    DateTimeRanges: []*bleve.dateTimeRange{
+        {Name: "Q1 2023", Start: q12023, End: q22023},
+        {Name: "Q2 2023", Start: q22023, End: q32023},
+        {Name: "Q3 2023+", Start: q32023}, // End: zero value = unbounded
+    },
+}
+```
+
+**Parameters**:
+- `DateTimeRanges`: Array of date ranges with Start/End as `time.Time`
+- Zero value for Start = unbounded start (matches all documents before End)
+- Zero value for End = unbounded end (matches all documents after Start)
+
+**Result Structure**:
+```go
+// Each bucket includes start/end timestamps in metadata
+type Bucket struct {
+    Key:   "Q1 2023",
+    Count: 1523,
+    Metadata: {
+        "start": "2023-01-01T00:00:00Z",  // RFC3339Nano format
+        "end":   "2023-04-01T00:00:00Z",
+    }
+}
+```
+
+**Example Use Cases**:
+- Quarterly/yearly reports with custom fiscal periods
+- Seasonal analysis ("Winter 2023", "Summer 2024")
+- Event-based time windows ("Before launch", "After migration")
+- Arbitrary date buckets that don't fit regular intervals
+
+**Comparison with date_histogram**:
+- **date_histogram**: Regular intervals (every hour, day, month, etc.)
+- **date_range**: Custom arbitrary ranges (Q1, Q2, "2020-2022", etc.)
 
 #### significant_terms
 Identifies terms that are uncommonly common in the search results compared to the entire index. Unlike `terms` aggregation which returns the most frequent terms, `significant_terms` finds terms that appear much more often in your query results than expected based on their frequency in the background data.
@@ -631,10 +682,10 @@ Aggregations process documents from multiple segments concurrently. The `TopNCol
 
 ## Limitations
 
-1. **Date range aggregations**: Not yet implemented (specific date ranges, different from date_histogram)
-2. **Pipeline aggregations**: Not yet implemented (e.g., moving average, derivative, bucket_sort)
-3. **Composite aggregations**: Not yet implemented (pagination for multi-level aggregations)
-4. **Nested aggregations**: Not yet implemented (requires document model changes)
+1. **Pipeline aggregations**: Not yet implemented (e.g., moving average, derivative, bucket_sort)
+2. **Composite aggregations**: Not yet implemented (pagination for multi-level aggregations)
+3. **Nested aggregations**: Not yet implemented (requires document model changes)
+4. **IP range aggregations**: Not yet implemented (ranges for IP addresses)
 
 ## Future Enhancements
 
