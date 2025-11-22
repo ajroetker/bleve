@@ -993,6 +993,11 @@ func (i *indexImpl) SearchInContext(ctx context.Context, req *SearchRequest) (sr
 		return nil, err
 	}
 
+	// Enable field collapsing if requested
+	if req.Collapse != nil && req.Collapse.Field != "" {
+		coll.SetCollapse(req.Collapse.Field)
+	}
+
 	var knnHits []*search.DocumentMatch
 	var skipKNNCollector bool
 
