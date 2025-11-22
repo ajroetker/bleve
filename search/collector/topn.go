@@ -79,6 +79,11 @@ type TopNCollector struct {
 
 	knnHits             map[string]*search.DocumentMatch
 	computeNewScoreExpl search.ScoreExplCorrectionCallbackFunc
+
+	// Collapse support
+	collapseField      string
+	collapseGroups     map[string]*search.DocumentMatch // field_value -> best doc for that value
+	collapseFieldValue string                           // current document's collapse field value
 }
 
 // CheckDoneEvery controls how frequently we check the context deadline
@@ -262,6 +267,10 @@ func (hc *TopNCollector) Collect(ctx context.Context, searcher search.Searcher, 
 			hc.facetsBuilder.UpdateVisitor(field, term)
 		}
 		hc.sort.UpdateVisitor(field, term)
+		// Capture collapse field value
+		if hc.collapseField != "" && field == hc.collapseField {
+			hc.collapseFieldValue = string(term)
+		}
 	}
 
 	dmHandlerMaker := MakeTopNDocumentMatchHandler
@@ -376,6 +385,9 @@ func (hc *TopNCollector) adjustDocumentMatch(ctx *search.SearchContext,
 func (hc *TopNCollector) prepareDocumentMatch(ctx *search.SearchContext,
 	reader index.IndexReader, d *search.DocumentMatch, isKnnDoc bool) (err error) {
 
+	// Reset collapse field value for each document
+	hc.collapseFieldValue = ""
+
 	// visit field terms for features that require it (sort, facets)
 	if !isKnnDoc && len(hc.neededFields) > 0 {
 		err = hc.visitFieldTerms(reader, d, hc.updateFieldVisitor)
@@ -462,6 +474,29 @@ func MakeTopNDocumentMatchHandler(
 					// this hit can't possibly be in the result set, so avoid heap ops
 					ctx.DocumentMatchPool.Put(d)
 					return nil
+				}
+			}
+
+			// Handle field collapsing - deduplicate by field value
+			// Only proceed if this is the best document for its collapse key so far
+			if hc.collapseField != "" {
+				collapseKey := hc.collapseFieldValue
+				// Following Elasticsearch behavior: treat missing values as empty string
+				// and group them together
+				if existingDoc, seen := hc.collapseGroups[collapseKey]; seen {
+					// We've seen this collapse key before, check if new doc is better
+					cmp := hc.sort.Compare(hc.cachedScoring, hc.cachedDesc, d, existingDoc)
+					if cmp >= 0 {
+						// Existing doc is better or equal, skip this one
+						ctx.DocumentMatchPool.Put(d)
+						return nil
+					}
+					// New doc is better, update the tracking map
+					// The old doc will eventually fall out of the top N naturally
+					hc.collapseGroups[collapseKey] = d
+				} else {
+					// First time seeing this collapse key, track it
+					hc.collapseGroups[collapseKey] = d
 				}
 			}
 
@@ -585,4 +620,23 @@ func (hc *TopNCollector) SetKNNHits(knnHits search.DocumentMatchCollection, newS
 		hc.knnHits[hit.ID] = hit
 	}
 	hc.computeNewScoreExpl = newScoreExplComputer
+}
+
+// SetCollapse enables field collapsing on the collector.
+// The collapse field must be a stored field with doc values.
+func (hc *TopNCollector) SetCollapse(field string) {
+	hc.collapseField = field
+	hc.collapseGroups = make(map[string]*search.DocumentMatch)
+
+	// Add collapse field to needed fields for doc value reading
+	found := false
+	for _, f := range hc.neededFields {
+		if f == field {
+			found = true
+			break
+		}
+	}
+	if !found {
+		hc.neededFields = append(hc.neededFields, field)
+	}
 }
