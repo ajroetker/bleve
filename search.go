@@ -770,4 +770,3 @@ func ParseParams(r *SearchRequest, input []byte) (*RequestParams, error) {
 
 	return params, nil
 }
-
