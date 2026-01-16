@@ -4,6 +4,7 @@ go 1.24
 
 require (
 	github.com/RoaringBitmap/roaring/v2 v2.4.5
+	github.com/axiomhq/hyperloglog v0.2.5
 	github.com/bits-and-blooms/bitset v1.22.0
 	github.com/blevesearch/bleve_index_api v1.3.0
 	github.com/blevesearch/geo v0.2.4
@@ -26,6 +27,7 @@ require (
 	github.com/blevesearch/zapx/v15 v15.4.2
 	github.com/blevesearch/zapx/v16 v16.3.0
 	github.com/blevesearch/zapx/v17 v17.0.0
+	github.com/bmatcuk/doublestar/v4 v4.9.1
 	github.com/couchbase/moss v0.2.0
 	github.com/spf13/cobra v1.8.1
 	go.etcd.io/bbolt v1.4.0
@@ -34,9 +36,7 @@ require (
 )
 
 require (
-	github.com/axiomhq/hyperloglog v0.2.5 // indirect
 	github.com/blevesearch/mmap-go v1.0.4 // indirect
-	github.com/bmatcuk/doublestar/v4 v4.9.1 // indirect
 	github.com/couchbase/ghistogram v0.1.0 // indirect
 	github.com/dgryski/go-metro v0.0.0-20180109044635-280f6062b5bc // indirect
 	github.com/golang/snappy v0.0.4 // indirect
