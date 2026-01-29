@@ -1879,7 +1879,7 @@ func (i *indexImpl) buildTopNCollector(ctx context.Context, req *SearchRequest, 
 				if err != nil {
 					return nil, err
 				}
-				if nm.IntersectsPrefix(fs) {
+				if fs.HasID() || nm.IntersectsPrefix(fs) {
 					return newNestedCollector(nr), nil
 				}
 			}
