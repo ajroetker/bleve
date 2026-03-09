@@ -15,6 +15,7 @@
 package bleve
 
 import (
+	"container/heap"
 	"context"
 	"fmt"
 	"sort"
@@ -1016,6 +1017,112 @@ func hitsInCurrentPage(req *SearchRequest, hits []*search.DocumentMatch) []*sear
 	return hits
 }
 
+// shardHits holds a single shard's pre-sorted search hits along with a
+// stable shard index used for deterministic tie-breaking during k-way merge.
+type shardHits struct {
+	hits     []*search.DocumentMatch
+	shardIdx int
+}
+
+// mergeHeapItem is a cursor into one shard's sorted result set.
+type mergeHeapItem struct {
+	hits     []*search.DocumentMatch
+	cursor   int
+	shardIdx int
+}
+
+// mergeHeap implements container/heap.Interface for k-way merging
+// of pre-sorted shard results. When two hits compare equal on all
+// sort dimensions, the shard index is used as a deterministic tiebreaker.
+type mergeHeap struct {
+	items         []mergeHeapItem
+	sortOrder     search.SortOrder
+	cachedScoring []bool
+	cachedDesc    []bool
+}
+
+func (h *mergeHeap) Len() int { return len(h.items) }
+
+func (h *mergeHeap) Less(i, j int) bool {
+	hitI := h.items[i].hits[h.items[i].cursor]
+	hitJ := h.items[j].hits[h.items[j].cursor]
+	c := h.sortOrder.Compare(h.cachedScoring, h.cachedDesc, hitI, hitJ)
+	if c == 0 {
+		return h.items[i].shardIdx < h.items[j].shardIdx
+	}
+	return c < 0
+}
+
+func (h *mergeHeap) Swap(i, j int) {
+	h.items[i], h.items[j] = h.items[j], h.items[i]
+}
+
+func (h *mergeHeap) Push(x interface{}) {
+	h.items = append(h.items, x.(mergeHeapItem))
+}
+
+func (h *mergeHeap) Pop() interface{} {
+	old := h.items
+	n := len(old)
+	item := old[n-1]
+	h.items = old[:n-1]
+	return item
+}
+
+// kWayMergeHits performs a k-way merge of pre-sorted per-shard hits,
+// returning only the hits needed for the requested page (From..From+Size).
+// This is O(K * log(N)) where K = From+Size and N = number of shards,
+// compared to O(N*M * log(N*M)) for a full sort of all concatenated hits.
+func kWayMergeHits(req *SearchRequest, shards []shardHits) []*search.DocumentMatch {
+	needed := req.From + req.Size
+	if needed == 0 {
+		return nil
+	}
+
+	so := req.Sort
+	h := &mergeHeap{
+		sortOrder:     so,
+		cachedScoring: so.CacheIsScore(),
+		cachedDesc:    so.CacheDescending(),
+		items:         make([]mergeHeapItem, 0, len(shards)),
+	}
+
+	for _, s := range shards {
+		if len(s.hits) > 0 {
+			h.items = append(h.items, mergeHeapItem{
+				hits:     s.hits,
+				cursor:   0,
+				shardIdx: s.shardIdx,
+			})
+		}
+	}
+	heap.Init(h)
+
+	result := make([]*search.DocumentMatch, 0, needed)
+	for h.Len() > 0 && len(result) < needed {
+		item := heap.Pop(h).(mergeHeapItem)
+		result = append(result, item.hits[item.cursor])
+		item.cursor++
+		if item.cursor < len(item.hits) {
+			heap.Push(h, item)
+		}
+	}
+
+	// skip over From
+	if req.From > 0 && len(result) > req.From {
+		result = result[req.From:]
+	} else if req.From > 0 {
+		return search.DocumentMatchCollection{}
+	}
+
+	// trim to Size
+	if req.Size > 0 && len(result) > req.Size {
+		result = result[:req.Size]
+	}
+
+	return result
+}
+
 // Extra parameters for MultiSearch
 type multiSearchParams struct {
 	preSearchData map[string]map[string]interface{}
@@ -1040,6 +1147,13 @@ func MultiSearch(ctx context.Context, req *SearchRequest, params *multiSearchPar
 	// run search on each index in separate go routine
 	var waitGroup sync.WaitGroup
 
+	// map index names to stable shard indices for deterministic
+	// tie-breaking during k-way merge
+	shardIndexMap := make(map[string]int, len(indexes))
+	for i, idx := range indexes {
+		shardIndexMap[idx.Name()] = i
+	}
+
 	searchChildIndex := func(in Index, childReq *SearchRequest) {
 		rv := asyncSearchResult{Name: in.Name()}
 		rv.Result, rv.Err = in.SearchInContext(ctx, childReq)
@@ -1062,25 +1176,38 @@ func MultiSearch(ctx context.Context, req *SearchRequest, params *multiSearchPar
 		close(asyncResults)
 	}()
 
+	// use k-way merge when we have a sort order, no rescorer that
+	// needs all hits for score fusion, and no custom sort function
+	canKWayMerge := params.rescorer == nil &&
+		len(req.Sort) > 0 &&
+		req.sortFunc == nil
+
 	var sr *SearchResult
+	var shards []shardHits
 	indexErrors := make(map[string]error)
 
 	for asr := range asyncResults {
 		if asr.Err == nil {
+			if canKWayMerge {
+				// keep each shard's pre-sorted hits separate
+				shards = append(shards, shardHits{
+					hits:     asr.Result.Hits,
+					shardIdx: shardIndexMap[asr.Name],
+				})
+				asr.Result.Hits = nil
+			}
 			if sr == nil {
 				// first result
 				sr = asr.Result
 			} else {
-				// merge with previous
+				// merge metadata (facets, aggregations, status, totals)
+				// when canKWayMerge, hits are nil so Merge just handles metadata
 				sr.Merge(asr.Result)
 			}
 		} else {
 			indexErrors[asr.Name] = asr.Err
 		}
 	}
-
-	// merge just concatenated all the hits
-	// now lets clean it up
 
 	// handle case where no results were successful
 	if sr == nil {
@@ -1091,12 +1218,16 @@ func MultiSearch(ctx context.Context, req *SearchRequest, params *multiSearchPar
 		}
 	}
 
-	if params.rescorer != nil {
-		sr.Hits, sr.Total, sr.MaxScore = params.rescorer.rescore(sr.Hits, params.fusionKnnHits)
-		params.rescorer.restoreSearchRequest()
+	if canKWayMerge {
+		sr.Hits = kWayMergeHits(req, shards)
+	} else {
+		// fallback: concatenate + full sort (needed for rescorer/custom sort)
+		if params.rescorer != nil {
+			sr.Hits, sr.Total, sr.MaxScore = params.rescorer.rescore(sr.Hits, params.fusionKnnHits)
+			params.rescorer.restoreSearchRequest()
+		}
+		sr.Hits = hitsInCurrentPage(req, sr.Hits)
 	}
-
-	sr.Hits = hitsInCurrentPage(req, sr.Hits)
 
 	// fix up facets
 	for name, fr := range req.Facets {
