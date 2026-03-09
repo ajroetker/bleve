@@ -1136,6 +1136,15 @@ func MultiSearch(ctx context.Context, req *SearchRequest, params *multiSearchPar
 	searchStart := time.Now()
 	asyncResults := make(chan *asyncSearchResult, len(indexes))
 
+	var preSearchData map[string]map[string]interface{}
+	var rescorer *rescorer
+	var fusionKnnHits search.DocumentMatchCollection
+	if params != nil {
+		preSearchData = params.preSearchData
+		rescorer = params.rescorer
+		fusionKnnHits = params.fusionKnnHits
+	}
+
 	var reverseQueryExecution bool
 	if req.SearchBefore != nil {
 		reverseQueryExecution = true
@@ -1164,8 +1173,8 @@ func MultiSearch(ctx context.Context, req *SearchRequest, params *multiSearchPar
 	waitGroup.Add(len(indexes))
 	for _, in := range indexes {
 		var payload map[string]interface{}
-		if params.preSearchData != nil {
-			payload = params.preSearchData[in.Name()]
+		if preSearchData != nil {
+			payload = preSearchData[in.Name()]
 		}
 		go searchChildIndex(in, createChildSearchRequest(req, payload))
 	}
@@ -1178,7 +1187,7 @@ func MultiSearch(ctx context.Context, req *SearchRequest, params *multiSearchPar
 
 	// use k-way merge when we have a sort order, no rescorer that
 	// needs all hits for score fusion, and no custom sort function
-	canKWayMerge := params.rescorer == nil &&
+	canKWayMerge := rescorer == nil &&
 		len(req.Sort) > 0 &&
 		req.sortFunc == nil
 
@@ -1222,9 +1231,9 @@ func MultiSearch(ctx context.Context, req *SearchRequest, params *multiSearchPar
 		sr.Hits = kWayMergeHits(req, shards)
 	} else {
 		// fallback: concatenate + full sort (needed for rescorer/custom sort)
-		if params.rescorer != nil {
-			sr.Hits, sr.Total, sr.MaxScore = params.rescorer.rescore(sr.Hits, params.fusionKnnHits)
-			params.rescorer.restoreSearchRequest()
+		if rescorer != nil {
+			sr.Hits, sr.Total, sr.MaxScore = rescorer.rescore(sr.Hits, fusionKnnHits)
+			rescorer.restoreSearchRequest()
 		}
 		sr.Hits = hitsInCurrentPage(req, sr.Hits)
 	}
