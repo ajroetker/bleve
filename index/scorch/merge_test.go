@@ -15,11 +15,14 @@
 package scorch
 
 import (
+	"context"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"testing"
 
 	"github.com/blevesearch/bleve/v2/document"
+	"github.com/blevesearch/bleve/v2/index/scorch/mergeplan"
 	index "github.com/blevesearch/bleve_index_api"
 )
 
@@ -153,5 +156,119 @@ func TestObsoleteSegmentMergeIntroduction(t *testing.T) {
 	err = idxr.Close()
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+// setupBenchIndex creates an index with numBatches separate batches of docsPerBatch documents,
+// resulting in numBatches persisted segments ready for merging.
+func setupBenchIndex(b *testing.B, name string, numBatches, docsPerBatch int) (*Scorch, func()) {
+	b.Helper()
+
+	cfg := CreateConfig(name)
+	err := InitTest(cfg)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	// configure merge plan to avoid automatic merging during setup
+	tmp := struct {
+		MaxSegmentsPerTier   int   `json:"maxSegmentsPerTier"`
+		SegmentsPerMergeTask int   `json:"segmentsPerMergeTask"`
+		FloorSegmentSize     int64 `json:"floorSegmentSize"`
+	}{
+		MaxSegmentsPerTier:   1000,
+		SegmentsPerMergeTask: 1000,
+		FloorSegmentSize:     2,
+	}
+	cfg["scorchMergePlanOptions"] = &tmp
+
+	analysisQueue := index.NewAnalysisQueue(1)
+	idx, err := NewScorch(Name, cfg, analysisQueue)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	err = idx.Open()
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	si := idx.(*Scorch)
+
+	batch := index.NewBatch()
+	for i := 0; i < numBatches; i++ {
+		for j := 0; j < docsPerBatch; j++ {
+			doc := document.NewDocument(fmt.Sprintf("doc-%d-%d", i, j))
+			doc.AddField(document.NewTextField("name", []uint64{},
+				[]byte(fmt.Sprintf("text for document %d in batch %d with some extra content for size", j, i))))
+			batch.Update(doc)
+		}
+		err = idx.Batch(batch)
+		if err != nil {
+			b.Fatal(err)
+		}
+		batch.Reset()
+	}
+
+	// wait for persistence to catch up
+	for atomic.LoadUint64(&si.stats.TotFileSegmentsAtRoot) < uint64(numBatches) {
+		// spin briefly
+	}
+
+	cleanup := func() {
+		_ = idx.Close()
+		_ = DestroyTest(cfg)
+	}
+
+	return si, cleanup
+}
+
+func BenchmarkForceMerge(b *testing.B) {
+	for _, tc := range []struct {
+		batches     int
+		docsPerBatch int
+	}{
+		{10, 100},
+		{20, 100},
+		{50, 50},
+	} {
+		b.Run(fmt.Sprintf("batches=%d/docs=%d", tc.batches, tc.docsPerBatch), func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				b.StopTimer()
+				si, cleanup := setupBenchIndex(b, fmt.Sprintf("BenchForceMerge-%d-%d-%d", tc.batches, tc.docsPerBatch, i), tc.batches, tc.docsPerBatch)
+
+				zapBefore := atomic.LoadUint64(&si.stats.TotFileMergeZapTime)
+				introBefore := atomic.LoadUint64(&si.stats.TotFileMergeZapIntroductionTime)
+				planBefore := atomic.LoadUint64(&si.stats.TotFileMergePlanTime)
+
+				b.StartTimer()
+
+				ctx := context.Background()
+				for atomic.LoadUint64(&si.stats.TotFileSegmentsAtRoot) > 1 {
+					err := si.ForceMerge(ctx, &mergeplan.MergePlanOptions{
+						MaxSegmentsPerTier:   1,
+						MaxSegmentSize:       1 << 30,
+						SegmentsPerMergeTask: tc.batches,
+						FloorSegmentSize:     1 << 30,
+					})
+					if err != nil {
+						b.Fatal(err)
+					}
+				}
+
+				b.StopTimer()
+
+				zapTime := atomic.LoadUint64(&si.stats.TotFileMergeZapTime) - zapBefore
+				introTime := atomic.LoadUint64(&si.stats.TotFileMergeZapIntroductionTime) - introBefore
+				planTime := atomic.LoadUint64(&si.stats.TotFileMergePlanTime) - planBefore
+
+				b.ReportMetric(float64(zapTime)/1e6, "merge-zap-ms")
+				b.ReportMetric(float64(introTime)/1e6, "intro-ms")
+				b.ReportMetric(float64(planTime)/1e6, "plan-ms")
+
+				cleanup()
+			}
+		})
 	}
 }

@@ -46,6 +46,9 @@ type SegmentSnapshot struct {
 	cachedMeta *cachedMeta
 
 	cachedDocs *cachedDocs
+
+	cachedFileSize  int64 // cached result of os.Stat for persisted segments; -1 means unset
+	cachedHasVector int32 // 0 = uncached, 1 = no vectors, 2 = has vectors
 }
 
 func (s *SegmentSnapshot) Segment() segment.Segment {
@@ -69,12 +72,24 @@ func (s *SegmentSnapshot) LiveSize() int64 {
 }
 
 func (s *SegmentSnapshot) HasVector() bool {
+	if v := atomic.LoadInt32(&s.cachedHasVector); v != 0 {
+		return v == 2
+	}
 	// number of vectors, for each vector field in the segment
 	numVecs := s.stats.Fetch()["num_vectors"]
-	return len(numVecs) > 0
+	if len(numVecs) > 0 {
+		atomic.StoreInt32(&s.cachedHasVector, 2)
+		return true
+	}
+	atomic.StoreInt32(&s.cachedHasVector, 1)
+	return false
 }
 
 func (s *SegmentSnapshot) FileSize() int64 {
+	if v := atomic.LoadInt64(&s.cachedFileSize); v > 0 {
+		return v
+	}
+
 	ps, ok := s.segment.(segment.PersistedSegment)
 	if !ok {
 		return 0
@@ -90,7 +105,9 @@ func (s *SegmentSnapshot) FileSize() int64 {
 		return 0
 	}
 
-	return fi.Size()
+	size := fi.Size()
+	atomic.StoreInt64(&s.cachedFileSize, size)
+	return size
 }
 
 func (s *SegmentSnapshot) Close() error {

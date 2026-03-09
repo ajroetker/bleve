@@ -298,6 +298,9 @@ func (s *Scorch) introducePersist(persist *persistIntroduction) {
 				creator:    "introducePersist",
 				mmaped:     1,
 			}
+			// Eagerly cache the file size so that the next merge
+			// planning cycle doesn't need to os.Stat this segment.
+			newSegmentSnapshot.FileSize()
 			newIndexSnapshot.segment[i] = newSegmentSnapshot
 			delete(persist.persisted, segmentSnapshot.id)
 
@@ -362,11 +365,10 @@ func (s *Scorch) introduceMerge(nextMerge *segmentMerge) {
 
 	var running, docsToPersistCount, memSegments, fileSegments uint64
 	var droppedSegmentFiles []string
+	// Lazily allocated bitmaps to track obsoletes per newly merged segment.
+	// Most merges have no concurrent deletions, so we avoid allocating
+	// bitmaps until they're actually needed.
 	newSegmentDeleted := make([]*roaring.Bitmap, len(nextMerge.new))
-	for i := range newSegmentDeleted {
-		// create a bitmaps to track the obsoletes per newly merged segments
-		newSegmentDeleted[i] = roaring.NewBitmap()
-	}
 
 	// iterate through current segments
 	for i := range root.segment {
@@ -380,11 +382,19 @@ func (s *Scorch) introduceMerge(nextMerge *segmentMerge) {
 				if segSnapAtMerge.oldSegment.deleted != nil {
 					deletedSince = roaring.AndNot(root.segment[i].deleted, segSnapAtMerge.oldSegment.deleted)
 				}
+				remapped := make([]uint32, 0, deletedSince.GetCardinality())
 				deletedSinceItr := deletedSince.Iterator()
 				for deletedSinceItr.HasNext() {
 					oldDocNum := deletedSinceItr.Next()
 					newDocNum := segSnapAtMerge.oldNewDocIDs[oldDocNum]
-					newSegmentDeleted[segSnapAtMerge.workerID].Add(uint32(newDocNum))
+					remapped = append(remapped, uint32(newDocNum))
+				}
+				if len(remapped) > 0 {
+					wid := segSnapAtMerge.workerID
+					if newSegmentDeleted[wid] == nil {
+						newSegmentDeleted[wid] = roaring.NewBitmap()
+					}
+					newSegmentDeleted[wid].AddMany(remapped)
 				}
 			}
 
@@ -425,13 +435,37 @@ func (s *Scorch) introduceMerge(nextMerge *segmentMerge) {
 	// merged segment wrt the current root segments, hence
 	// applying the obsolete segment contents to newly merged segment
 	for _, ss := range nextMerge.mergedSegHistory {
-		obsoleted := ss.oldSegment.DocNumbersLive()
-		if obsoleted != nil {
-			obsoletedIter := obsoleted.Iterator()
-			for obsoletedIter.HasNext() {
-				oldDocNum := obsoletedIter.Next()
-				newDocNum := ss.oldNewDocIDs[oldDocNum]
-				newSegmentDeleted[ss.workerID].Add(uint32(newDocNum))
+		count := ss.oldSegment.segment.Count()
+		if count == 0 {
+			continue
+		}
+		wid := ss.workerID
+
+		if ss.oldSegment.deleted == nil {
+			// All docs were live — remap all doc numbers directly
+			// without creating an intermediate bitmap.
+			remapped := make([]uint32, 0, count)
+			for docNum := uint64(0); docNum < count; docNum++ {
+				remapped = append(remapped, uint32(ss.oldNewDocIDs[docNum]))
+			}
+			if newSegmentDeleted[wid] == nil {
+				newSegmentDeleted[wid] = roaring.NewBitmap()
+			}
+			newSegmentDeleted[wid].AddMany(remapped)
+		} else {
+			obsoleted := ss.oldSegment.DocNumbersLive()
+			if obsoleted != nil && !obsoleted.IsEmpty() {
+				remapped := make([]uint32, 0, obsoleted.GetCardinality())
+				obsoletedIter := obsoleted.Iterator()
+				for obsoletedIter.HasNext() {
+					oldDocNum := obsoletedIter.Next()
+					newDocNum := ss.oldNewDocIDs[oldDocNum]
+					remapped = append(remapped, uint32(newDocNum))
+				}
+				if newSegmentDeleted[wid] == nil {
+					newSegmentDeleted[wid] = roaring.NewBitmap()
+				}
+				newSegmentDeleted[wid].AddMany(remapped)
 			}
 		}
 	}
@@ -441,15 +475,19 @@ func (s *Scorch) introduceMerge(nextMerge *segmentMerge) {
 	for i, newMergedSegment := range nextMerge.new {
 		// checking if this newly merged segment is worth keeping based on
 		// obsoleted doc count since the merge intro started
+		deletedCount := uint64(0)
+		if newSegmentDeleted[i] != nil {
+			deletedCount = newSegmentDeleted[i].GetCardinality()
+		}
 		if newMergedSegment != nil &&
-			newMergedSegment.Count() > newSegmentDeleted[i].GetCardinality() {
+			newMergedSegment.Count() > deletedCount {
 			stats := newFieldStats()
 			if fsr, ok := newMergedSegment.(segment.FieldStatsReporter); ok {
 				fsr.UpdateFieldStats(stats)
 			}
 
 			// put the merged segment at the end of newSnapshot
-			newSnapshot.segment = append(newSnapshot.segment, &SegmentSnapshot{
+			ss := &SegmentSnapshot{
 				id:         nextMerge.id[i],
 				segment:    newMergedSegment, // take ownership for nextMerge.new's ref-count
 				deleted:    newSegmentDeleted[i],
@@ -458,15 +496,19 @@ func (s *Scorch) introduceMerge(nextMerge *segmentMerge) {
 				cachedMeta: &cachedMeta{meta: nil},
 				creator:    "introduceMerge",
 				mmaped:     nextMerge.mmaped,
-			})
+			}
+			newSnapshot.segment = append(newSnapshot.segment, ss)
 			newSnapshot.offsets = append(newSnapshot.offsets, running)
 			running += newMergedSegment.Count()
 
 			switch newMergedSegment.(type) {
 			case segment.PersistedSegment:
+				// Eagerly cache the file size so that the next merge
+				// planning cycle doesn't need to os.Stat this segment.
+				ss.FileSize()
 				fileSegments++
 			default:
-				docsToPersistCount += newMergedSegment.Count() - newSegmentDeleted[i].GetCardinality()
+				docsToPersistCount += newMergedSegment.Count() - deletedCount
 				memSegments++
 			}
 			skipped = false

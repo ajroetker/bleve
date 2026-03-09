@@ -17,7 +17,6 @@ package searcher
 import (
 	"context"
 	"fmt"
-	"math"
 	"reflect"
 
 	"github.com/blevesearch/bleve/v2/search"
@@ -109,7 +108,7 @@ func bm25ScoreMetrics(ctx context.Context, field string,
 	if count == 0 && fieldCardinality == 0 {
 		return 0, 0, nil
 	}
-	return count, math.Ceil(float64(fieldCardinality) / float64(count)), nil
+	return count, float64(fieldCardinality) / float64(count), nil
 }
 
 func newTermSearcherFromReader(ctx context.Context, indexReader index.IndexReader,

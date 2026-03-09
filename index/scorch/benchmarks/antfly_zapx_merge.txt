@@ -1,0 +1,21 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/blevesearch/bleve/v2/index/scorch
+cpu: Apple M4 Max
+BenchmarkForceMerge/batches=10/docs=100-14         	      60	  19228546 ns/op	         0.004958 intro-ms	        16.93 merge-zap-ms	         0.02262 plan-ms	 6049854 B/op	   97171 allocs/op
+BenchmarkForceMerge/batches=10/docs=100-14         	      70	  19376963 ns/op	         0.004333 intro-ms	        16.88 merge-zap-ms	         0.009916 plan-ms	 6054651 B/op	   97217 allocs/op
+BenchmarkForceMerge/batches=10/docs=100-14         	      68	  19776592 ns/op	         0.01458 intro-ms	        23.94 merge-zap-ms	         0.01008 plan-ms	 6055707 B/op	   97225 allocs/op
+BenchmarkForceMerge/batches=10/docs=100-14         	      58	  19481995 ns/op	         0.004667 intro-ms	        16.97 merge-zap-ms	         0.01150 plan-ms	 6054343 B/op	   97146 allocs/op
+BenchmarkForceMerge/batches=10/docs=100-14         	      58	  19210920 ns/op	         0.005250 intro-ms	        20.55 merge-zap-ms	         0.04158 plan-ms	 6056492 B/op	   97235 allocs/op
+BenchmarkForceMerge/batches=20/docs=100-14         	      45	  23999717 ns/op	         0.007166 intro-ms	        23.98 merge-zap-ms	         0.01533 plan-ms	10000975 B/op	  193779 allocs/op
+BenchmarkForceMerge/batches=20/docs=100-14         	      51	  25640405 ns/op	         0.01362 intro-ms	        57.07 merge-zap-ms	         0.02067 plan-ms	 9988217 B/op	  193631 allocs/op
+BenchmarkForceMerge/batches=20/docs=100-14         	      49	  24206674 ns/op	         0.01000 intro-ms	        24.92 merge-zap-ms	         0.01800 plan-ms	 9994911 B/op	  193745 allocs/op
+BenchmarkForceMerge/batches=20/docs=100-14         	      50	  23340191 ns/op	         0.008167 intro-ms	        25.06 merge-zap-ms	         0.01996 plan-ms	 9998774 B/op	  193789 allocs/op
+BenchmarkForceMerge/batches=20/docs=100-14         	      46	  23443266 ns/op	         0.008083 intro-ms	        24.90 merge-zap-ms	         0.01796 plan-ms	 9988981 B/op	  193686 allocs/op
+BenchmarkForceMerge/batches=50/docs=50-14          	      48	  25992636 ns/op	         0.009542 intro-ms	        25.82 merge-zap-ms	         0.04083 plan-ms	13269440 B/op	  256127 allocs/op
+BenchmarkForceMerge/batches=50/docs=50-14          	      54	  25610789 ns/op	         0.01250 intro-ms	        25.78 merge-zap-ms	         0.04404 plan-ms	13304154 B/op	  256879 allocs/op
+BenchmarkForceMerge/batches=50/docs=50-14          	      46	  25441819 ns/op	         0.008250 intro-ms	        22.77 merge-zap-ms	         0.04396 plan-ms	13312544 B/op	  256844 allocs/op
+BenchmarkForceMerge/batches=50/docs=50-14          	      49	  26396072 ns/op	         0.008209 intro-ms	        23.80 merge-zap-ms	         0.1357 plan-ms	13296864 B/op	  256619 allocs/op
+BenchmarkForceMerge/batches=50/docs=50-14          	      45	  26670794 ns/op	         0.007250 intro-ms	        24.84 merge-zap-ms	         0.04075 plan-ms	13275917 B/op	  256161 allocs/op
+PASS
+ok  	github.com/blevesearch/bleve/v2/index/scorch	567.679s

@@ -786,11 +786,9 @@ func constructSynonymPreSearchData(rv map[string]map[string]interface{}, sr *Sea
 func constructBM25PreSearchData(rv map[string]map[string]interface{}, sr *SearchResult, indexes []Index) map[string]map[string]interface{} {
 	bmStats := sr.BM25Stats
 	if bmStats != nil {
+		// share a single read-only BM25Stats instance across all indexes
 		for _, index := range indexes {
-			rv[index.Name()][search.BM25PreSearchDataKey] = &search.BM25Stats{
-				DocCount:         bmStats.DocCount,
-				FieldCardinality: bmStats.FieldCardinality,
-			}
+			rv[index.Name()][search.BM25PreSearchDataKey] = bmStats
 		}
 	}
 	return rv

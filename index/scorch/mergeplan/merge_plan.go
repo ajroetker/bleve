@@ -250,6 +250,10 @@ func plan(segmentsIn []Segment, o *MergePlanOptions) (*MergePlan, error) {
 		eligibles = removeSegments(eligibles, empties)
 	}
 
+	// Pre-allocate a reusable roster buffer to avoid repeated slice allocations
+	// in the inner scoring loop.
+	rosterBuf := make([]Segment, 0, o.SegmentsPerMergeTask)
+
 	// While we’re over budget, keep looping, which might produce
 	// another MergeTask.
 	for len(eligibles) > 0 && (len(eligibles)+len(rv.Tasks)) > budgetNumSegments {
@@ -259,7 +263,7 @@ func plan(segmentsIn []Segment, o *MergePlanOptions) (*MergePlan, error) {
 		var bestRosterScore float64 // Lower score is better.
 
 		for startIdx := 0; startIdx < len(eligibles); startIdx++ {
-			var roster []Segment
+			roster := rosterBuf[:0]
 			var rosterLiveSize int64
 			var rosterFileSize int64 // useful for segments with vectors
 
@@ -286,7 +290,8 @@ func plan(segmentsIn []Segment, o *MergePlanOptions) (*MergePlan, error) {
 				rosterScore := scoreSegments(roster, o)
 
 				if len(bestRoster) == 0 || rosterScore < bestRosterScore {
-					bestRoster = roster
+					// Copy the best roster so it survives reuse of rosterBuf.
+					bestRoster = append([]Segment(nil), roster...)
 					bestRosterScore = rosterScore
 				}
 			}
@@ -342,18 +347,22 @@ func CalcBudget(totalSize int64, firstTierSize int64, o *MergePlanOptions) (
 }
 
 // Of note, removeSegments() keeps the ordering of the results stable.
+// It compacts the input slice in-place to avoid allocating a new slice.
 func removeSegments(segments []Segment, toRemove []Segment) []Segment {
-	rv := make([]Segment, 0, len(segments)-len(toRemove))
-OUTER:
-	for _, segment := range segments {
-		for _, r := range toRemove {
-			if segment == r {
-				continue OUTER
-			}
-		}
-		rv = append(rv, segment)
+	toRemoveSet := make(map[uint64]struct{}, len(toRemove))
+	for _, r := range toRemove {
+		toRemoveSet[r.Id()] = struct{}{}
 	}
-	return rv
+	n := 0
+	for _, segment := range segments {
+		if _, ok := toRemoveSet[segment.Id()]; !ok {
+			segments[n] = segment
+			n++
+		}
+	}
+	// Clear trailing references to allow GC of removed segments.
+	clear(segments[n:])
+	return segments[:n]
 }
 
 // Smaller result score is better.

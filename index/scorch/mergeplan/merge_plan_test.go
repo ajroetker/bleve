@@ -20,6 +20,7 @@ import (
 	"math/rand"
 	"os"
 	"reflect"
+	"slices"
 	"sort"
 	"testing"
 	"time"
@@ -50,6 +51,47 @@ func makeLinearSegments(n int) (rv []Segment) {
 		})
 	}
 	return rv
+}
+
+func makeRealisticSegments(n int) []Segment {
+	rv := make([]Segment, n)
+	for i := 0; i < n; i++ {
+		size := int64(1000 + (i%10)*500)
+		rv[i] = &segment{
+			MyId:       uint64(i),
+			MyFullSize: size,
+			MyLiveSize: size - int64(i%3)*100,
+			MyFileSize: size * 1024,
+		}
+	}
+	return rv
+}
+
+func BenchmarkPlan(b *testing.B) {
+	for _, n := range []int{10, 50, 100, 500} {
+		segs := makeRealisticSegments(n)
+		o := &DefaultMergePlanOptions
+		b.Run(fmt.Sprintf("segments=%d", n), func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				_, _ = Plan(segs, o)
+			}
+		})
+	}
+}
+
+func BenchmarkRemoveSegments(b *testing.B) {
+	for _, n := range []int{10, 100, 500} {
+		segs := makeRealisticSegments(n)
+		toRemove := segs[:n/4]
+		b.Run(fmt.Sprintf("segments=%d/remove=%d", n, len(toRemove)), func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				// Copy since removeSegments compacts in-place.
+				_ = removeSegments(slices.Clone(segs), toRemove)
+			}
+		})
+	}
 }
 
 // ----------------------------------------

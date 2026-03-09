@@ -1,0 +1,61 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/blevesearch/bleve/v2
+cpu: Apple M4 Max
+BenchmarkMultiSearchBM25/shards=2-14            	   45376	    134381 ns/op	   29529 B/op	     336 allocs/op
+BenchmarkMultiSearchBM25/shards=2-14            	   44830	    131024 ns/op	   29460 B/op	     336 allocs/op
+BenchmarkMultiSearchBM25/shards=2-14            	   45078	    131533 ns/op	   29499 B/op	     336 allocs/op
+BenchmarkMultiSearchBM25/shards=2-14            	   45595	    131072 ns/op	   29470 B/op	     336 allocs/op
+BenchmarkMultiSearchBM25/shards=2-14            	   45362	    131618 ns/op	   29531 B/op	     336 allocs/op
+BenchmarkMultiSearchBM25/shards=4-14            	   37713	    157845 ns/op	   57820 B/op	     649 allocs/op
+BenchmarkMultiSearchBM25/shards=4-14            	   38026	    192294 ns/op	   57917 B/op	     649 allocs/op
+BenchmarkMultiSearchBM25/shards=4-14            	   37424	    159076 ns/op	   57783 B/op	     649 allocs/op
+BenchmarkMultiSearchBM25/shards=4-14            	   37963	    159514 ns/op	   57914 B/op	     649 allocs/op
+BenchmarkMultiSearchBM25/shards=4-14            	   29724	    194681 ns/op	   57951 B/op	     649 allocs/op
+BenchmarkMultiSearchBM25/shards=8-14            	   23312	    242308 ns/op	  114722 B/op	    1275 allocs/op
+BenchmarkMultiSearchBM25/shards=8-14            	   24811	    241133 ns/op	  114705 B/op	    1275 allocs/op
+BenchmarkMultiSearchBM25/shards=8-14            	   24855	    240265 ns/op	  114688 B/op	    1275 allocs/op
+BenchmarkMultiSearchBM25/shards=8-14            	   24482	    242471 ns/op	  114666 B/op	    1275 allocs/op
+BenchmarkMultiSearchBM25/shards=8-14            	   24627	    242006 ns/op	  114831 B/op	    1275 allocs/op
+BenchmarkMultiSearchBM25DeepPage/from=0-14      	   43298	    142358 ns/op	   46702 B/op	     529 allocs/op
+BenchmarkMultiSearchBM25DeepPage/from=0-14      	   55021	    121964 ns/op	   46571 B/op	     529 allocs/op
+BenchmarkMultiSearchBM25DeepPage/from=0-14      	   53365	    107602 ns/op	   46583 B/op	     529 allocs/op
+BenchmarkMultiSearchBM25DeepPage/from=0-14      	   54940	    142308 ns/op	   46588 B/op	     529 allocs/op
+BenchmarkMultiSearchBM25DeepPage/from=0-14      	   54738	    108592 ns/op	   46568 B/op	     529 allocs/op
+BenchmarkMultiSearchBM25DeepPage/from=100-14    	   27430	    236175 ns/op	  272224 B/op	    1735 allocs/op
+BenchmarkMultiSearchBM25DeepPage/from=100-14    	   24283	    219410 ns/op	  272247 B/op	    1735 allocs/op
+BenchmarkMultiSearchBM25DeepPage/from=100-14    	   27837	    210424 ns/op	  272370 B/op	    1735 allocs/op
+BenchmarkMultiSearchBM25DeepPage/from=100-14    	   27370	    211653 ns/op	  272227 B/op	    1735 allocs/op
+BenchmarkMultiSearchBM25DeepPage/from=100-14    	   27864	    213504 ns/op	  272229 B/op	    1735 allocs/op
+BenchmarkMultiSearchBM25DeepPage/from=500-14    	    9115	    657663 ns/op	 1223550 B/op	    6544 allocs/op
+BenchmarkMultiSearchBM25DeepPage/from=500-14    	    9118	    651749 ns/op	 1223368 B/op	    6543 allocs/op
+BenchmarkMultiSearchBM25DeepPage/from=500-14    	    9140	    653703 ns/op	 1223557 B/op	    6544 allocs/op
+BenchmarkMultiSearchBM25DeepPage/from=500-14    	    6783	    826287 ns/op	 1224041 B/op	    6544 allocs/op
+BenchmarkMultiSearchBM25DeepPage/from=500-14    	    8930	    660254 ns/op	 1223581 B/op	    6544 allocs/op
+BenchmarkMultiSearchBM25PreSearchOverhead/model=bm25-14         	   37629	    158079 ns/op	   57343 B/op	     649 allocs/op
+BenchmarkMultiSearchBM25PreSearchOverhead/model=bm25-14         	   37752	    157519 ns/op	   57412 B/op	     649 allocs/op
+BenchmarkMultiSearchBM25PreSearchOverhead/model=bm25-14         	   37956	    154714 ns/op	   57389 B/op	     649 allocs/op
+BenchmarkMultiSearchBM25PreSearchOverhead/model=bm25-14         	   37904	    156573 ns/op	   57299 B/op	     649 allocs/op
+BenchmarkMultiSearchBM25PreSearchOverhead/model=bm25-14         	   30170	    168217 ns/op	   57408 B/op	     649 allocs/op
+BenchmarkMultiSearchBM25PreSearchOverhead/model=tfidf-14        	   45178	    132924 ns/op	   50871 B/op	     550 allocs/op
+BenchmarkMultiSearchBM25PreSearchOverhead/model=tfidf-14        	   45500	    131243 ns/op	   50830 B/op	     550 allocs/op
+BenchmarkMultiSearchBM25PreSearchOverhead/model=tfidf-14        	   44780	    131472 ns/op	   50923 B/op	     550 allocs/op
+BenchmarkMultiSearchBM25PreSearchOverhead/model=tfidf-14        	   45308	    131902 ns/op	   50923 B/op	     550 allocs/op
+BenchmarkMultiSearchBM25PreSearchOverhead/model=tfidf-14        	   45706	    151795 ns/op	   50925 B/op	     550 allocs/op
+BenchmarkMultiSearchMergeSort/size=10-14                        	   35876	    166941 ns/op	   46713 B/op	     529 allocs/op
+BenchmarkMultiSearchMergeSort/size=10-14                        	   34995	    184569 ns/op	   46926 B/op	     529 allocs/op
+BenchmarkMultiSearchMergeSort/size=10-14                        	   35958	    167694 ns/op	   46729 B/op	     529 allocs/op
+BenchmarkMultiSearchMergeSort/size=10-14                        	   35930	    165702 ns/op	   46921 B/op	     529 allocs/op
+BenchmarkMultiSearchMergeSort/size=10-14                        	   36033	    174863 ns/op	   46918 B/op	     529 allocs/op
+BenchmarkMultiSearchMergeSort/size=100-14                       	   21505	    276023 ns/op	  260193 B/op	    1615 allocs/op
+BenchmarkMultiSearchMergeSort/size=100-14                       	   21631	    274866 ns/op	  260458 B/op	    1615 allocs/op
+BenchmarkMultiSearchMergeSort/size=100-14                       	   21426	    277549 ns/op	  260350 B/op	    1615 allocs/op
+BenchmarkMultiSearchMergeSort/size=100-14                       	   21721	    275306 ns/op	  260195 B/op	    1615 allocs/op
+BenchmarkMultiSearchMergeSort/size=100-14                       	   21648	    274972 ns/op	  260475 B/op	    1615 allocs/op
+BenchmarkMultiSearchMergeSort/size=500-14                       	    7743	    767315 ns/op	 1171479 B/op	    6423 allocs/op
+BenchmarkMultiSearchMergeSort/size=500-14                       	    7848	    757047 ns/op	 1172342 B/op	    6426 allocs/op
+BenchmarkMultiSearchMergeSort/size=500-14                       	    7856	    761318 ns/op	 1171606 B/op	    6424 allocs/op
+BenchmarkMultiSearchMergeSort/size=500-14                       	    7698	    767432 ns/op	 1171822 B/op	    6423 allocs/op
+BenchmarkMultiSearchMergeSort/size=500-14                       	    7538	    788700 ns/op	 1170769 B/op	    6423 allocs/op
+PASS
+ok  	github.com/blevesearch/bleve/v2	623.100s

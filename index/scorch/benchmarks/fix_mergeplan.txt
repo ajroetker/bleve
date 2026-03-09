@@ -1,0 +1,41 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/blevesearch/bleve/v2/index/scorch/mergeplan
+cpu: Apple M4 Max
+BenchmarkPlan/segments=10-14  	  770527	      1579 ns/op	    1336 B/op	      13 allocs/op
+BenchmarkPlan/segments=10-14  	  770924	      1582 ns/op	    1336 B/op	      13 allocs/op
+BenchmarkPlan/segments=10-14  	  749256	      1593 ns/op	    1336 B/op	      13 allocs/op
+BenchmarkPlan/segments=10-14  	  753442	      1591 ns/op	    1336 B/op	      13 allocs/op
+BenchmarkPlan/segments=10-14  	  753066	      1581 ns/op	    1336 B/op	      13 allocs/op
+BenchmarkPlan/segments=50-14  	   56925	     21418 ns/op	    9576 B/op	      61 allocs/op
+BenchmarkPlan/segments=50-14  	   56812	     21146 ns/op	    9576 B/op	      61 allocs/op
+BenchmarkPlan/segments=50-14  	   56940	     21047 ns/op	    9576 B/op	      61 allocs/op
+BenchmarkPlan/segments=50-14  	   56986	     21125 ns/op	    9576 B/op	      61 allocs/op
+BenchmarkPlan/segments=50-14  	   56898	     21115 ns/op	    9576 B/op	      61 allocs/op
+BenchmarkPlan/segments=100-14 	   17202	     69825 ns/op	   22344 B/op	     131 allocs/op
+BenchmarkPlan/segments=100-14 	   17240	     69980 ns/op	   22344 B/op	     131 allocs/op
+BenchmarkPlan/segments=100-14 	   17217	     69605 ns/op	   22344 B/op	     131 allocs/op
+BenchmarkPlan/segments=100-14 	   17314	     69544 ns/op	   22344 B/op	     131 allocs/op
+BenchmarkPlan/segments=100-14 	   17203	     70644 ns/op	   22344 B/op	     131 allocs/op
+BenchmarkPlan/segments=500-14 	     793	   1509779 ns/op	  217288 B/op	    1291 allocs/op
+BenchmarkPlan/segments=500-14 	     789	   1517772 ns/op	  217288 B/op	    1291 allocs/op
+BenchmarkPlan/segments=500-14 	     796	   1509498 ns/op	  217288 B/op	    1291 allocs/op
+BenchmarkPlan/segments=500-14 	     786	   1509929 ns/op	  217288 B/op	    1291 allocs/op
+BenchmarkPlan/segments=500-14 	     793	   1520469 ns/op	  217288 B/op	    1291 allocs/op
+BenchmarkRemoveSegments/segments=10/remove=2-14         	12699829	        93.84 ns/op	     160 B/op	       1 allocs/op
+BenchmarkRemoveSegments/segments=10/remove=2-14         	12957330	        93.84 ns/op	     160 B/op	       1 allocs/op
+BenchmarkRemoveSegments/segments=10/remove=2-14         	12726254	        94.23 ns/op	     160 B/op	       1 allocs/op
+BenchmarkRemoveSegments/segments=10/remove=2-14         	13140909	        93.00 ns/op	     160 B/op	       1 allocs/op
+BenchmarkRemoveSegments/segments=10/remove=2-14         	12986836	        92.50 ns/op	     160 B/op	       1 allocs/op
+BenchmarkRemoveSegments/segments=100/remove=25-14       	  874855	      1341 ns/op	    2408 B/op	       4 allocs/op
+BenchmarkRemoveSegments/segments=100/remove=25-14       	  897385	      1346 ns/op	    2408 B/op	       4 allocs/op
+BenchmarkRemoveSegments/segments=100/remove=25-14       	  853390	      1347 ns/op	    2408 B/op	       4 allocs/op
+BenchmarkRemoveSegments/segments=100/remove=25-14       	  855002	      1353 ns/op	    2408 B/op	       4 allocs/op
+BenchmarkRemoveSegments/segments=100/remove=25-14       	  913893	      1342 ns/op	    2408 B/op	       4 allocs/op
+BenchmarkRemoveSegments/segments=500/remove=125-14      	  290757	      4244 ns/op	   13096 B/op	       4 allocs/op
+BenchmarkRemoveSegments/segments=500/remove=125-14      	  233676	      5095 ns/op	   13096 B/op	       4 allocs/op
+BenchmarkRemoveSegments/segments=500/remove=125-14      	  248806	      5064 ns/op	   13096 B/op	       4 allocs/op
+BenchmarkRemoveSegments/segments=500/remove=125-14      	  241993	      5103 ns/op	   13096 B/op	       4 allocs/op
+BenchmarkRemoveSegments/segments=500/remove=125-14      	  251080	      4970 ns/op	   13096 B/op	       4 allocs/op
+PASS
+ok  	github.com/blevesearch/bleve/v2/index/scorch/mergeplan	48.555s

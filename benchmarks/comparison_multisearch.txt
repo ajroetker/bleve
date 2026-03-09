@@ -1,0 +1,52 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/blevesearch/bleve/v2
+cpu: Apple M4 Max
+                                                │ benchmarks/baseline_multisearch.txt │ benchmarks/optimized_multisearch.txt │
+                                                │               sec/op                │     sec/op      vs base              │
+MultiSearchBM25/shards=2-14                                              132.3µ ± ∞ ¹     131.5µ ± ∞ ¹       ~ (p=0.222 n=5)
+MultiSearchBM25/shards=4-14                                              169.9µ ± ∞ ¹     159.5µ ± ∞ ¹       ~ (p=0.421 n=5)
+MultiSearchBM25/shards=8-14                                              239.0µ ± ∞ ¹     242.0µ ± ∞ ¹  +1.24% (p=0.016 n=5)
+MultiSearchBM25DeepPage/from=0-14                                        108.6µ ± ∞ ¹     122.0µ ± ∞ ¹       ~ (p=0.310 n=5)
+MultiSearchBM25DeepPage/from=100-14                                      217.8µ ± ∞ ¹     213.5µ ± ∞ ¹       ~ (p=0.421 n=5)
+MultiSearchBM25DeepPage/from=500-14                                      671.0µ ± ∞ ¹     657.7µ ± ∞ ¹       ~ (p=0.151 n=5)
+MultiSearchBM25PreSearchOverhead/model=bm25-14                           159.1µ ± ∞ ¹     157.5µ ± ∞ ¹       ~ (p=0.095 n=5)
+MultiSearchBM25PreSearchOverhead/model=tfidf-14                          131.4µ ± ∞ ¹     131.9µ ± ∞ ¹       ~ (p=0.222 n=5)
+MultiSearchMergeSort/size=10-14                                          178.8µ ± ∞ ¹     167.7µ ± ∞ ¹       ~ (p=0.421 n=5)
+MultiSearchMergeSort/size=100-14                                         279.8µ ± ∞ ¹     275.3µ ± ∞ ¹  -1.59% (p=0.008 n=5)
+MultiSearchMergeSort/size=500-14                                         776.9µ ± ∞ ¹     767.3µ ± ∞ ¹       ~ (p=0.310 n=5)
+geomean                                                                  223.4µ           221.8µ        -0.72%
+¹ need >= 6 samples for confidence interval at level 0.95
+
+                                                │ benchmarks/baseline_multisearch.txt │ benchmarks/optimized_multisearch.txt │
+                                                │                B/op                 │      B/op       vs base              │
+MultiSearchBM25/shards=2-14                                             28.83Ki ± ∞ ¹    28.81Ki ± ∞ ¹       ~ (p=0.222 n=5)
+MultiSearchBM25/shards=4-14                                             56.54Ki ± ∞ ¹    56.56Ki ± ∞ ¹       ~ (p=0.508 n=5)
+MultiSearchBM25/shards=8-14                                             112.1Ki ± ∞ ¹    112.0Ki ± ∞ ¹       ~ (p=0.056 n=5)
+MultiSearchBM25DeepPage/from=0-14                                       45.61Ki ± ∞ ¹    45.49Ki ± ∞ ¹  -0.26% (p=0.032 n=5)
+MultiSearchBM25DeepPage/from=100-14                                     266.0Ki ± ∞ ¹    265.8Ki ± ∞ ¹       ~ (p=0.056 n=5)
+MultiSearchBM25DeepPage/from=500-14                                     1.167Mi ± ∞ ¹    1.167Mi ± ∞ ¹       ~ (p=0.056 n=5)
+MultiSearchBM25PreSearchOverhead/model=bm25-14                          56.15Ki ± ∞ ¹    56.04Ki ± ∞ ¹       ~ (p=0.095 n=5)
+MultiSearchBM25PreSearchOverhead/model=tfidf-14                         49.67Ki ± ∞ ¹    49.73Ki ± ∞ ¹       ~ (p=0.897 n=5)
+MultiSearchMergeSort/size=10-14                                         45.85Ki ± ∞ ¹    45.82Ki ± ∞ ¹       ~ (p=0.222 n=5)
+MultiSearchMergeSort/size=100-14                                        254.3Ki ± ∞ ¹    254.2Ki ± ∞ ¹       ~ (p=0.310 n=5)
+MultiSearchMergeSort/size=500-14                                        1.117Mi ± ∞ ¹    1.117Mi ± ∞ ¹       ~ (p=1.000 n=5)
+geomean                                                                 123.1Ki          123.1Ki        -0.06%
+¹ need >= 6 samples for confidence interval at level 0.95
+
+                                                │ benchmarks/baseline_multisearch.txt │ benchmarks/optimized_multisearch.txt │
+                                                │              allocs/op              │  allocs/op    vs base                │
+MultiSearchBM25/shards=2-14                                               338.0 ± ∞ ¹    336.0 ± ∞ ¹  -0.59% (p=0.008 n=5)
+MultiSearchBM25/shards=4-14                                               653.0 ± ∞ ¹    649.0 ± ∞ ¹  -0.61% (p=0.008 n=5)
+MultiSearchBM25/shards=8-14                                              1.283k ± ∞ ¹   1.275k ± ∞ ¹  -0.62% (p=0.008 n=5)
+MultiSearchBM25DeepPage/from=0-14                                         533.0 ± ∞ ¹    529.0 ± ∞ ¹  -0.75% (p=0.008 n=5)
+MultiSearchBM25DeepPage/from=100-14                                      1.739k ± ∞ ¹   1.735k ± ∞ ¹  -0.23% (p=0.008 n=5)
+MultiSearchBM25DeepPage/from=500-14                                      6.548k ± ∞ ¹   6.544k ± ∞ ¹  -0.06% (p=0.008 n=5)
+MultiSearchBM25PreSearchOverhead/model=bm25-14                            653.0 ± ∞ ¹    649.0 ± ∞ ¹  -0.61% (p=0.008 n=5)
+MultiSearchBM25PreSearchOverhead/model=tfidf-14                           550.0 ± ∞ ¹    550.0 ± ∞ ¹       ~ (p=1.000 n=5) ²
+MultiSearchMergeSort/size=10-14                                           533.0 ± ∞ ¹    529.0 ± ∞ ¹  -0.75% (p=0.008 n=5)
+MultiSearchMergeSort/size=100-14                                         1.619k ± ∞ ¹   1.615k ± ∞ ¹  -0.25% (p=0.008 n=5)
+MultiSearchMergeSort/size=500-14                                         6.427k ± ∞ ¹   6.423k ± ∞ ¹  -0.06% (p=0.008 n=5)
+geomean                                                                  1.118k         1.114k        -0.41%
+¹ need >= 6 samples for confidence interval at level 0.95
+² all samples are equal
