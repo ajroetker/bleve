@@ -273,9 +273,9 @@ func TestAggregationResultsMerge(t *testing.T) {
 					Field: "rating",
 					Type:  "avg",
 					Value: &AvgResult{
-						Count: 5,       // 2 + 3
-						Sum:   80.0,    // 20 + 60
-						Avg:   16.0,    // 80 / 5 (weighted average, not (10+20)/2)
+						Count: 5,    // 2 + 3
+						Sum:   80.0, // 20 + 60
+						Avg:   16.0, // 80 / 5 (weighted average, not (10+20)/2)
 					},
 				},
 			},
@@ -376,5 +376,103 @@ func TestAggregationResultsMerge(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestAggregationResultsMergeSignificantTerms(t *testing.T) {
+	results := AggregationResults{
+		"sig": {
+			Field: "tags",
+			Type:  "significant_terms",
+			Buckets: []*Bucket{
+				{
+					Key:   "zig",
+					Count: 2,
+					Metadata: map[string]interface{}{
+						"bg_count": int64(5),
+						"score":    0.1,
+					},
+				},
+				{
+					Key:   "go",
+					Count: 1,
+					Metadata: map[string]interface{}{
+						"bg_count": int64(4),
+						"score":    0.2,
+					},
+				},
+			},
+			Metadata: map[string]interface{}{
+				"algorithm":         "jlh",
+				"fg_doc_count":      int64(3),
+				"bg_doc_count":      int64(10),
+				"significant_terms": 2,
+			},
+		},
+	}
+
+	results.Merge(AggregationResults{
+		"sig": {
+			Field: "tags",
+			Type:  "significant_terms",
+			Buckets: []*Bucket{
+				{
+					Key:   "zig",
+					Count: 3,
+					Metadata: map[string]interface{}{
+						"bg_count": int64(8),
+						"score":    0.3,
+					},
+				},
+				{
+					Key:   "db",
+					Count: 2,
+					Metadata: map[string]interface{}{
+						"bg_count": int64(6),
+						"score":    0.4,
+					},
+				},
+			},
+			Metadata: map[string]interface{}{
+				"algorithm":         "jlh",
+				"fg_doc_count":      int64(4),
+				"bg_doc_count":      int64(12),
+				"significant_terms": 2,
+			},
+		},
+	})
+
+	merged := results["sig"]
+	if merged == nil {
+		t.Fatal("expected merged significant_terms result")
+	}
+	if got := metadataInt64(merged.Metadata, "fg_doc_count"); got != 7 {
+		t.Fatalf("expected fg_doc_count 7, got %d", got)
+	}
+	if got := metadataInt64(merged.Metadata, "bg_doc_count"); got != 22 {
+		t.Fatalf("expected bg_doc_count 22, got %d", got)
+	}
+	if len(merged.Buckets) != 2 {
+		t.Fatalf("expected merged bucket list to be trimmed to 2, got %d", len(merged.Buckets))
+	}
+
+	var zigBucket *Bucket
+	for _, bucket := range merged.Buckets {
+		if bucket.Key == "zig" {
+			zigBucket = bucket
+			break
+		}
+	}
+	if zigBucket == nil {
+		t.Fatal("expected merged zig bucket")
+	}
+	if zigBucket.Count != 5 {
+		t.Fatalf("expected merged zig count 5, got %d", zigBucket.Count)
+	}
+	if got := metadataInt64(zigBucket.Metadata, "bg_count"); got != 13 {
+		t.Fatalf("expected merged zig bg_count 13, got %d", got)
+	}
+	if score := metadataFloat64(zigBucket.Metadata, "score"); score <= 0 {
+		t.Fatalf("expected recomputed significant_terms score > 0, got %f", score)
 	}
 }

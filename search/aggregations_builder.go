@@ -17,6 +17,7 @@ package search
 import (
 	"math"
 	"reflect"
+	"sort"
 
 	"github.com/axiomhq/hyperloglog"
 	"github.com/blevesearch/bleve/v2/size"
@@ -49,11 +50,11 @@ type AggregationBuilder interface {
 
 // AggregationsBuilder manages multiple aggregation builders
 type AggregationsBuilder struct {
-	indexReader      index.IndexReader
-	aggregationNames []string
-	aggregations     []AggregationBuilder
+	indexReader         index.IndexReader
+	aggregationNames    []string
+	aggregations        []AggregationBuilder
 	aggregationsByField map[string][]AggregationBuilder
-	fields           []string
+	fields              []string
 }
 
 // NewAggregationsBuilder creates a new aggregations builder
@@ -190,7 +191,7 @@ type StatsResult struct {
 
 // CardinalityResult contains cardinality estimate with HyperLogLog sketch for merging
 type CardinalityResult struct {
-	Cardinality int64  `json:"value"`         // Estimated unique count
+	Cardinality int64  `json:"value"`            // Estimated unique count
 	Sketch      []byte `json:"sketch,omitempty"` // Serialized HLL sketch for distributed merging
 
 	// HLL is kept in-memory for efficient local merging (not serialized to JSON)
@@ -200,17 +201,17 @@ type CardinalityResult struct {
 // SignificantTermsStats contains background term statistics for significant_terms aggregations
 // Used in pre-search phase to collect term frequencies across all index shards
 type SignificantTermsStats struct {
-	Field        string         `json:"field"`
-	TotalDocs    int64          `json:"total_docs"`
+	Field        string           `json:"field"`
+	TotalDocs    int64            `json:"total_docs"`
 	TermDocFreqs map[string]int64 `json:"term_doc_freqs"` // term -> background doc frequency
 }
 
 // Bucket represents a single bucket in a bucket aggregation
 type Bucket struct {
-	Key          interface{}                   `json:"key"`                     // Term or range name
-	Count        int64                         `json:"doc_count"`               // Number of documents in this bucket
-	Aggregations map[string]*AggregationResult `json:"aggregations,omitempty"`  // Sub-aggregations
-	Metadata     map[string]interface{}        `json:"metadata,omitempty"`      // Additional metadata (e.g., lat/lon for geohash)
+	Key          interface{}                   `json:"key"`                    // Term or range name
+	Count        int64                         `json:"doc_count"`              // Number of documents in this bucket
+	Aggregations map[string]*AggregationResult `json:"aggregations,omitempty"` // Sub-aggregations
+	Metadata     map[string]interface{}        `json:"metadata,omitempty"`     // Additional metadata (e.g., lat/lon for geohash)
 }
 
 func (ar *AggregationResult) Size() int {
@@ -318,6 +319,8 @@ func (ar AggregationResults) Merge(other AggregationResults) {
 		case "terms", "range", "date_range":
 			// Merge buckets
 			ar.mergeBuckets(aggResult, otherAggResult)
+		case "significant_terms":
+			ar.mergeSignificantTerms(aggResult, otherAggResult)
 		}
 	}
 }
@@ -350,6 +353,241 @@ func (ar AggregationResults) mergeBuckets(dest, src *AggregationResult) {
 			}
 		}
 	}
+}
+
+func (ar AggregationResults) mergeSignificantTerms(dest, src *AggregationResult) {
+	if dest == nil || src == nil {
+		return
+	}
+
+	targetSize := len(dest.Buckets)
+	if len(src.Buckets) > targetSize {
+		targetSize = len(src.Buckets)
+	}
+
+	if dest.Metadata == nil {
+		dest.Metadata = make(map[string]interface{})
+	}
+
+	algorithm := metadataString(dest.Metadata, "algorithm")
+	if algorithm == "" {
+		algorithm = metadataString(src.Metadata, "algorithm")
+	}
+	if algorithm == "" {
+		algorithm = "jlh"
+	}
+	dest.Metadata["algorithm"] = algorithm
+
+	fgDocCount := metadataInt64(dest.Metadata, "fg_doc_count") + metadataInt64(src.Metadata, "fg_doc_count")
+	bgDocCount := metadataInt64(dest.Metadata, "bg_doc_count") + metadataInt64(src.Metadata, "bg_doc_count")
+	if bgDocCount == 0 {
+		bgDocCount = fgDocCount
+	}
+
+	bucketMap := make(map[interface{}]*Bucket, len(dest.Buckets)+len(src.Buckets))
+	for _, bucket := range dest.Buckets {
+		bucketMap[bucket.Key] = bucket
+	}
+
+	for _, srcBucket := range src.Buckets {
+		destBucket, exists := bucketMap[srcBucket.Key]
+		if !exists {
+			dest.Buckets = append(dest.Buckets, srcBucket)
+			bucketMap[srcBucket.Key] = srcBucket
+			continue
+		}
+
+		destBucket.Count += srcBucket.Count
+		if destBucket.Metadata == nil {
+			destBucket.Metadata = make(map[string]interface{})
+		}
+		bgCount := metadataInt64(destBucket.Metadata, "bg_count") + metadataInt64(srcBucket.Metadata, "bg_count")
+		destBucket.Metadata["bg_count"] = bgCount
+
+		if srcBucket.Aggregations != nil {
+			if destBucket.Aggregations == nil {
+				destBucket.Aggregations = make(map[string]*AggregationResult)
+			}
+			AggregationResults(destBucket.Aggregations).Merge(srcBucket.Aggregations)
+		}
+	}
+
+	for _, bucket := range dest.Buckets {
+		if bucket.Metadata == nil {
+			bucket.Metadata = make(map[string]interface{})
+		}
+		bgCount := metadataInt64(bucket.Metadata, "bg_count")
+		if bgCount == 0 {
+			bgCount = bucket.Count
+			bucket.Metadata["bg_count"] = bgCount
+		}
+		bucket.Metadata["score"] = calculateSignificanceScore(algorithm, bucket.Count, fgDocCount, bgCount, bgDocCount)
+	}
+
+	sort.Slice(dest.Buckets, func(i, j int) bool {
+		leftScore := metadataFloat64(dest.Buckets[i].Metadata, "score")
+		rightScore := metadataFloat64(dest.Buckets[j].Metadata, "score")
+		if leftScore == rightScore {
+			if dest.Buckets[i].Count == dest.Buckets[j].Count {
+				return bucketKeyString(dest.Buckets[i].Key) < bucketKeyString(dest.Buckets[j].Key)
+			}
+			return dest.Buckets[i].Count > dest.Buckets[j].Count
+		}
+		return leftScore > rightScore
+	})
+
+	if targetSize > 0 && len(dest.Buckets) > targetSize {
+		dest.Buckets = dest.Buckets[:targetSize]
+	}
+
+	dest.Metadata["fg_doc_count"] = fgDocCount
+	dest.Metadata["bg_doc_count"] = bgDocCount
+	dest.Metadata["unique_terms"] = len(bucketMap)
+	dest.Metadata["significant_terms"] = len(dest.Buckets)
+}
+
+func metadataString(metadata map[string]interface{}, key string) string {
+	if metadata == nil {
+		return ""
+	}
+	switch typed := metadata[key].(type) {
+	case string:
+		return typed
+	default:
+		return ""
+	}
+}
+
+func metadataInt64(metadata map[string]interface{}, key string) int64 {
+	if metadata == nil {
+		return 0
+	}
+	switch typed := metadata[key].(type) {
+	case int:
+		return int64(typed)
+	case int64:
+		return typed
+	case float64:
+		return int64(typed)
+	default:
+		return 0
+	}
+}
+
+func metadataFloat64(metadata map[string]interface{}, key string) float64 {
+	if metadata == nil {
+		return 0
+	}
+	switch typed := metadata[key].(type) {
+	case float64:
+		return typed
+	case float32:
+		return float64(typed)
+	case int:
+		return float64(typed)
+	case int64:
+		return float64(typed)
+	default:
+		return 0
+	}
+}
+
+func bucketKeyString(key interface{}) string {
+	switch typed := key.(type) {
+	case string:
+		return typed
+	default:
+		return ""
+	}
+}
+
+func calculateSignificanceScore(algorithm string, fgCount, fgTotal, bgCount, bgTotal int64) float64 {
+	switch algorithm {
+	case "mutual_information":
+		return calculateMutualInformation(fgCount, fgTotal, bgCount, bgTotal)
+	case "chi_squared":
+		return calculateChiSquared(fgCount, fgTotal, bgCount, bgTotal)
+	case "percentage":
+		return calculatePercentage(fgCount, fgTotal, bgCount, bgTotal)
+	default:
+		return calculateJLH(fgCount, fgTotal, bgCount, bgTotal)
+	}
+}
+
+func calculateJLH(fgCount, fgTotal, bgCount, bgTotal int64) float64 {
+	if fgCount <= 0 || fgTotal <= 0 || bgCount <= 0 || bgTotal <= 0 {
+		return 0
+	}
+	fgRate := float64(fgCount) / float64(fgTotal)
+	bgRate := float64(bgCount) / float64(bgTotal)
+	if bgRate == 0 || fgRate <= bgRate {
+		return 0
+	}
+	return (fgRate - bgRate) * (fgRate / bgRate)
+}
+
+func calculateMutualInformation(fgCount, fgTotal, bgCount, bgTotal int64) float64 {
+	if fgCount <= 0 || fgTotal <= 0 || bgCount <= 0 || bgTotal <= 0 {
+		return 0
+	}
+	fgRate := float64(fgCount) / float64(fgTotal)
+	bgRate := float64(bgCount) / float64(bgTotal)
+	if fgRate == 0 || bgRate == 0 {
+		return 0
+	}
+	score := fgRate * math.Log2(fgRate/bgRate)
+	if math.IsNaN(score) || math.IsInf(score, 0) {
+		return 0
+	}
+	return score
+}
+
+func calculateChiSquared(fgCount, fgTotal, bgCount, bgTotal int64) float64 {
+	if fgCount <= 0 || fgTotal <= 0 || bgCount <= 0 || bgTotal <= 0 {
+		return 0
+	}
+	N11 := float64(fgCount)
+	N10 := float64(fgTotal - fgCount)
+	N01 := float64(bgCount - fgCount)
+	if N01 < 0 {
+		N01 = 0
+	}
+	N00 := float64(bgTotal-bgCount) - N10
+	if N00 < 0 {
+		N00 = 0
+	}
+	N := N11 + N10 + N01 + N00
+	if N == 0 {
+		return 0
+	}
+	if N10 == 0 || N01 == 0 {
+		bgRate := float64(bgCount) / float64(bgTotal)
+		if bgRate == 0 {
+			return 0
+		}
+		return (float64(fgCount) / float64(fgTotal)) / bgRate
+	}
+	score := (N11 / N) * math.Log2((N*N11)/((N11+N10)*(N11+N01)))
+	if math.IsNaN(score) || math.IsInf(score, 0) {
+		return 0
+	}
+	return score
+}
+
+func calculatePercentage(fgCount, fgTotal, bgCount, bgTotal int64) float64 {
+	if fgCount <= 0 || fgTotal <= 0 || bgCount <= 0 || bgTotal <= 0 {
+		return 0
+	}
+	fgRate := float64(fgCount) / float64(fgTotal)
+	bgRate := float64(bgCount) / float64(bgTotal)
+	if bgRate == 0 {
+		return 0
+	}
+	score := (fgRate / bgRate) - 1.0
+	if math.IsNaN(score) || math.IsInf(score, 0) {
+		return 0
+	}
+	return score
 }
 
 // mergeCardinality merges cardinality aggregation results using HyperLogLog sketches
