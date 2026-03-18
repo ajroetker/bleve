@@ -6,9 +6,9 @@ require (
 	github.com/RoaringBitmap/roaring/v2 v2.15.0
 	github.com/axiomhq/hyperloglog v0.2.6
 	github.com/bits-and-blooms/bitset v1.24.4
-	github.com/blevesearch/bleve_index_api v1.3.2
+	github.com/blevesearch/bleve_index_api v1.3.3-0.20260311083042-62a5343ee2d1
 	github.com/blevesearch/geo v0.2.5
-	github.com/blevesearch/go-faiss v1.0.27
+	github.com/blevesearch/go-faiss v1.0.28-0.20260311083224-baa72a4cd87f
 	github.com/blevesearch/go-metrics v0.0.0-20201227073835-cf1acfcdf475
 	github.com/blevesearch/go-porterstemmer v1.0.3
 	github.com/blevesearch/goleveldb v1.1.0
@@ -26,7 +26,7 @@ require (
 	github.com/blevesearch/zapx/v14 v14.4.3
 	github.com/blevesearch/zapx/v15 v15.4.3
 	github.com/blevesearch/zapx/v16 v16.3.1
-	github.com/blevesearch/zapx/v17 v17.0.2
+	github.com/blevesearch/zapx/v17 v17.0.3-0.20260311100439-7e7434b4f844
 	github.com/bmatcuk/doublestar/v4 v4.10.0
 	github.com/couchbase/moss v0.3.0
 	github.com/spf13/cobra v1.10.2
