@@ -6,14 +6,14 @@ require (
 	github.com/RoaringBitmap/roaring/v2 v2.15.0
 	github.com/axiomhq/hyperloglog v0.2.6
 	github.com/bits-and-blooms/bitset v1.24.4
-	github.com/blevesearch/bleve_index_api v1.3.3-0.20260311083042-62a5343ee2d1
+	github.com/blevesearch/bleve_index_api v1.3.4
 	github.com/blevesearch/geo v0.2.5
-	github.com/blevesearch/go-faiss v1.0.28-0.20260311083224-baa72a4cd87f
+	github.com/blevesearch/go-faiss v1.0.28
 	github.com/blevesearch/go-metrics v0.0.0-20201227073835-cf1acfcdf475
 	github.com/blevesearch/go-porterstemmer v1.0.3
 	github.com/blevesearch/goleveldb v1.1.0
 	github.com/blevesearch/gtreap v0.1.1
-	github.com/blevesearch/scorch_segment_api/v2 v2.4.1
+	github.com/blevesearch/scorch_segment_api/v2 v2.4.3
 	github.com/blevesearch/segment v0.9.1
 	github.com/blevesearch/snowball v0.6.1
 	github.com/blevesearch/snowballstem v0.9.0
@@ -51,4 +51,4 @@ require (
 	golang.org/x/sys v0.42.0 // indirect
 )
 
-replace github.com/blevesearch/zapx/v17 => github.com/antflydb/zapx/v17 v17.0.2-antfly003
+replace github.com/blevesearch/zapx/v17 => github.com/antflydb/zapx/v17 v17.0.2-antfly004
