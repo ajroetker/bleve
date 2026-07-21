@@ -331,6 +331,20 @@ func (s *Scorch) pausePersisterForMergerCatchUp(lastPersistedEpoch uint64,
 	// Persister pause until the merger catches up to reduce the segment
 	// file count under the threshold.
 	// But if there is memory pressure, then skip this sleep maneuvers.
+	// The nap below blocks on merger progress. If the merger is itself
+	// starved (e.g. a large FST merge on a constrained CPU), that signal may
+	// not come for hours - and with the persister napping, nothing ever
+	// deletes obsolete files, so the file count that keeps this loop alive
+	// only grows: a livelock. Run the purger on a ticker inside the nap; a
+	// successful sweep drops numFilesOnDisk below the threshold and exits
+	// the loop without requiring merger progress.
+	var napPurgeCh <-chan time.Time
+	if ForcedPurgeInterval > 0 {
+		napPurgeTicker := time.NewTicker(ForcedPurgeInterval)
+		defer napPurgeTicker.Stop()
+		napPurgeCh = napPurgeTicker.C
+	}
+
 OUTER:
 	for po.PersisterNapUnderNumFiles > 0 &&
 		numFilesOnDisk >= uint64(po.PersisterNapUnderNumFiles) &&
@@ -343,6 +357,10 @@ OUTER:
 		case ew := <-s.persisterNotifier:
 			persistWatchers = append(persistWatchers, ew)
 			lastMergedEpoch = ew.epoch
+		case <-napPurgeCh:
+			if ok := s.fireEvent(EventKindPurgerCheck, 0); ok {
+				s.removeOldData()
+			}
 		}
 
 		atomic.AddUint64(&s.stats.TotPersisterSlowMergerResume, 1)
