@@ -110,6 +110,7 @@ func (s *Scorch) persisterLoop() {
 	var persistWatchers []*epochWatcher
 	var lastPersistedEpoch, lastMergedEpoch uint64
 	var ew *epochWatcher
+	var lastForcedPurge time.Time
 
 	var unpersistedCallbacks []index.BatchCallback
 
@@ -126,6 +127,18 @@ func (s *Scorch) persisterLoop() {
 OUTER:
 	for {
 		atomic.AddUint64(&s.stats.TotPersistLoopBeg, 1)
+
+		// Cleanup is otherwise only attempted while the persister waits for
+		// changes (below) or inside the merger-catch-up pause - both are
+		// unreachable on an index under sustained mutation, so obsolete files
+		// accumulate at churn rate until the process restarts. Force a
+		// periodic pass regardless of load.
+		if ForcedPurgeInterval > 0 && time.Since(lastForcedPurge) >= ForcedPurgeInterval {
+			if ok := s.fireEvent(EventKindPurgerCheck, 0); ok {
+				s.removeOldData()
+			}
+			lastForcedPurge = time.Now()
+		}
 
 		select {
 		case <-s.closeCh:
@@ -1093,6 +1106,12 @@ func (s *Scorch) removeOldData() {
 // keep around per Scorch instance.  Useful for apps that require
 // rollback'ability.
 var NumSnapshotsToKeep = 1
+
+// ForcedPurgeInterval forces a removeOldData pass from the persister loop at
+// least this often even when the index never goes idle. Without it, cleanup
+// runs only when the persister catches up and waits, which never happens
+// under sustained mutation. 0 restores the idle-only behavior.
+var ForcedPurgeInterval = time.Minute
 
 // RollbackSamplingInterval controls how far back we are looking
 // in the history to get the rollback points.
