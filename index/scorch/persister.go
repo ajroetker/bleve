@@ -112,6 +112,18 @@ func (s *Scorch) persisterLoop() {
 	var ew *epochWatcher
 	var lastForcedPurge time.Time
 
+	// One ticker serves every parked select below. The loop-head pass only
+	// runs while the loop iterates; a persister parked waiting on the
+	// introducer never reaches it — and a merge-abort storm (a plan whose
+	// later task fails after an earlier task succeeded) orphans unmarked
+	// outputs at replan rate with nothing sweeping them.
+	var forcedPurgeCh <-chan time.Time
+	if ForcedPurgeInterval > 0 {
+		forcedPurgeTicker := time.NewTicker(ForcedPurgeInterval)
+		defer forcedPurgeTicker.Stop()
+		forcedPurgeCh = forcedPurgeTicker.C
+	}
+
 	var unpersistedCallbacks []index.BatchCallback
 
 	po, err := s.parsePersisterOptions()
@@ -268,6 +280,12 @@ OUTER:
 			// if the watchers are already caught up then let them wait,
 			// else let them continue to do the catch up
 			persistWatchers = append(persistWatchers, ew)
+		case <-forcedPurgeCh:
+			// nothing introduced, nothing persisted — but aborted merge
+			// plans may have orphaned already-unmarked outputs
+			if ok := s.fireEvent(EventKindPurgerCheck, 0); ok {
+				s.removeOldData()
+			}
 		}
 
 		atomic.AddUint64(&s.stats.TotPersistLoopEnd, 1)
