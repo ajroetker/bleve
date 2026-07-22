@@ -26,7 +26,14 @@ import (
 	index "github.com/blevesearch/bleve_index_api"
 )
 
-// TestForcedPurgeUnderSustainedMutation pins ForcedPurgeInterval: obsolete
+// shortenForcedPurgeInterval shrinks the forced-purge interval for the test
+// window and returns a restore func. It is assigned by an init() in
+// forced_purge_fence_test.go so that this file compiles against a scorch
+// without the forced-purge knob; such builds leave it nil and exhibit
+// exactly the starvation this test pins.
+var shortenForcedPurgeInterval func(d time.Duration) (restore func())
+
+// TestForcedPurgeUnderSustainedMutation pins the forced purge: obsolete
 // segment files must be reclaimed WHILE the index is under continuous
 // mutation, before any quiescence. The batches are unsafe (no wait for
 // persist) and issued back-to-back from a writer goroutine, so the persister
@@ -34,12 +41,13 @@ import (
 // .zap census is sampled mid-churn, not after the writer stops. Without the
 // forced purge nothing prunes old bolt snapshots either, so every persisted
 // epoch pins its segment files forever and the mid-churn census climbs
-// without bound (idle-only cleanup was the pre-patch behavior; disabling the
-// interval reproduces it and fails this test).
+// without bound (idle-only cleanup was the pre-patch behavior and fails
+// this test).
 func TestForcedPurgeUnderSustainedMutation(t *testing.T) {
-	origInterval := ForcedPurgeInterval
-	ForcedPurgeInterval = 20 * time.Millisecond
-	defer func() { ForcedPurgeInterval = origInterval }()
+	if shortenForcedPurgeInterval != nil {
+		restore := shortenForcedPurgeInterval(20 * time.Millisecond)
+		defer restore()
+	}
 
 	cfg := CreateConfig("TestForcedPurgeUnderSustainedMutation")
 	cfg["unsafe_batch"] = true // writer must outrun the persister or it idles
